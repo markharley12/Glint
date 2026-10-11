@@ -1,0 +1,14 @@
+node_modules/
+/dist/
+# Orbit data is fetched by `npm run data` (and by the Pages workflow before
+# every deploy); it goes stale within days, so it is never committed. Tests
+# use the frozen snapshots under src/**/fixtures/ instead.
+/public/data/
+/test-results/
+/playwright-report/
+/tools/reference/.venv/
+__pycache__/
+*.local
+.DS_Store
+.claude/
+/tools/reference/.cache/

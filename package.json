@@ -1,0 +1,48 @@
+{
+  "name": "sat-ar",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Point your phone at the sky and see which satellites are up there. A browser AR satellite tracker.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "data": "node scripts/fetch-data.ts",
+    "stars": "node scripts/build-stars.ts"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.11.3",
+    "astronomy-engine": "^2.1.19",
+    "geomagnetism": "^0.2.0",
+    "preact": "^10.29.8",
+    "satellite.js": "^7.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.0",
+    "@preact/preset-vite": "^2.10.6",
+    "@testing-library/preact": "^3.2.4",
+    "@types/node": "^22.20.5",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "fflate": "^0.8.3",
+    "globals": "^17.13.0",
+    "jsdom": "^30.1.2",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  }
+}

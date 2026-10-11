@@ -1,0 +1,32 @@
+{
+  // The app: everything under src/, which Vite bundles for the browser.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "useDefineForClassFields": true,
+    // Imports name their .ts extension so the same modules run under Node's
+    // type stripping too: scripts/ imports the pack format and star builder
+    // straight from src/. Erasable syntax only (no enums, no parameter
+    // properties) for the same reason.
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src"]
+}
