@@ -136,6 +136,11 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   leaves them out of the precache and the worker caches any `assets/` file
   on first use. Country names come from `Intl.DisplayNames`. GPS is no
   longer requested on page load — only after "Use my location".
+- **Idle frame rate**: outside AR, with the clock at 1× and no input or
+  signal change for 0.7 s, the loop draws only as often as the fastest
+  satellite moves half a pixel (≤ 10 fps on the map). Any signal the
+  picture depends on is watched by one `effect` in SkyView that wakes it;
+  a new one must be added there.
 - **No IndexedDB**: the service worker's caches hold the data; settings are a
   small validated JSON in localStorage.
 

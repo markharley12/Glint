@@ -5,6 +5,7 @@
  * - ar: the camera feed with the sky drawn over it, steered by the phone's
  *   sensors.
  */
+import { effect } from '@preact/signals'
 import { useEffect, useRef } from 'preact/hooks'
 import { declination } from '../core/declination.ts'
 import { enuToHorizontal } from '../core/frames.ts'
@@ -19,7 +20,7 @@ import { apparent, satellitePosition, SkyRenderer, type HitTarget } from '../sky
 import { orientation, registerVideo } from '../state/ar.ts'
 import { calibrating, calibrationTarget } from '../state/calibration.ts'
 import { clock } from '../state/clock.ts'
-import { recordPointing } from '../state/identify.ts'
+import { identifyState, recordPointing } from '../state/identify.ts'
 import { observer } from '../state/observer.ts'
 import { settings, updateSettings } from '../state/settings.ts'
 import { catalog, getTracker, indexByNorad, selected } from '../state/tracker.ts'
@@ -29,6 +30,15 @@ import { following, lookDirection, renderStats, tooltip, track } from '../state/
 const TRACK_BEFORE_MS = 8 * 60_000
 const TRACK_AFTER_MS = 16 * 60_000
 const TRACK_STEP_MS = 10_000
+
+/** Battery: when nothing is being touched or changed, draw only as often
+ *  as the fastest satellite (the ISS overhead, ~1°/s) moves this many
+ *  pixels — 10 fps on the map, ~20 in the planetarium, every frame when
+ *  zoomed in or in AR. */
+const IDLE_MAX_STEP_PX = 0.5
+const FASTEST_DEG_PER_S = 1.1
+/** Full frame rate for this long after any input or change. */
+const BUSY_MS = 700
 
 /** The camera orientation the AR view is using right now; read by the
  *  calibration panel. */
@@ -60,6 +70,18 @@ export function SkyView() {
     let filtered: Quat | null = null
     let trackRequest = 0
     let decl = { key: '', value: 0 }
+    let busyUntil = 0
+    let lastRender = -Infinity
+    let idleIntervalMs = 0
+    const wake = () => {
+      busyUntil = performance.now() + BUSY_MS
+    }
+    // Anything that changes the picture other than time passing.
+    const stopWatching = effect(() => {
+      void [settings.value, selected.value, clock.epoch.value, clock.rate.value, clock.paused.value, lookDirection.value]
+      void [track.value, catalog.value, observer.value, calibrating.value, calibrationTarget.value, identifyState.value]
+      wake()
+    })
 
     const resize = () => {
       const r = canvas.getBoundingClientRect()
@@ -69,7 +91,10 @@ export function SkyView() {
       canvas.width = Math.round(width * dpr)
       canvas.height = Math.round(height * dpr)
     }
-    const ro = new ResizeObserver(resize)
+    const ro = new ResizeObserver(() => {
+      resize()
+      wake()
+    })
     ro.observe(canvas)
     resize()
 
@@ -163,8 +188,13 @@ export function SkyView() {
       }
       if (catalog.peek().status === 'ready') maybeRequestTrack(now)
       const s = settings.peek()
+      const real = performance.now()
+      const idle = s.view !== 'ar' && real > busyUntil && clock.rate.peek() === 1
+      if (idle && real - lastRender < idleIntervalMs) return
+      lastRender = real
       const sky = celestial.get(now, o)
       const projector = projectorFor(now)
+      idleIntervalMs = Math.min(100, (1000 * IDLE_MAX_STEP_PX) / (projector.pxPerDeg * FASTEST_DEG_PER_S))
       if (s.view === 'ar' && arCamera.q) recordPointing(now, quat.rotate(arCamera.q, [0, 0, -1]))
       const t = track.peek()
       renderer.render({
@@ -182,7 +212,6 @@ export function SkyView() {
         track: t && t.norad === selected.peek() ? t.points : null,
         highlight: calibrating.peek() ? calibrationTarget.peek() : null,
       })
-      const real = performance.now()
       if (real - lastStats > 400) {
         lastStats = real
         renderStats.value = { ...renderer.stats, sunEl: sky.sunEl }
@@ -207,6 +236,7 @@ export function SkyView() {
     }
 
     const onDown = (e: PointerEvent) => {
+      wake()
       canvas.setPointerCapture(e.pointerId)
       const p = local(e)
       pointers.set(e.pointerId, { ...p, x0: p.x, y0: p.y })
@@ -220,6 +250,7 @@ export function SkyView() {
     const onMove = (e: PointerEvent) => {
       const prev = pointers.get(e.pointerId)
       if (!prev) return
+      wake()
       const p = local(e)
       const dx = p.x - prev.x
       const dy = p.y - prev.y
@@ -285,6 +316,7 @@ export function SkyView() {
 
     return () => {
       cancelAnimationFrame(raf)
+      stopWatching()
       ro.disconnect()
       document.removeEventListener('visibilitychange', onVisibility)
       canvas.removeEventListener('pointerdown', onDown)

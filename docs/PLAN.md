@@ -113,13 +113,17 @@ Progress as of Oct 2026; see CLAUDE.md for what was decided along the way.
 - [x] Pass predictions screen (+ .ics export).
 - [x] GitHub Action data pipeline + offline cache (service worker, not IndexedDB) + data-age indicator.
 - [x] PWA install + offline.
-- [x] Filters, rough brightness estimates. Starlink-train highlighting still to do.
+- [x] Filters, rough brightness estimates, satellite-train detection (drawn and listed).
+
+### Since
+- [x] "What's that?": identify a light by following it with the phone.
+- [x] Night (red) mode, share links, place-name search, keyboard shortcuts.
+- [x] Battery: the render loop draws at 10–20 fps when nothing changes.
 
 ### Later ideas
 - Pass notifications (web push is limited on iOS — maybe calendar export instead).
 - Space-Track full catalogue (debris, rocket bodies).
-- Night-vision red mode.
-- Share a pass / "what was that?" lookup for a time + direction after the fact.
+- "What was that?" lookup for a time + direction after the fact.
 
 ## Risks / open questions
 - Compass accuracy and sensor quirks across phones → mitigated by calibration; needs real-device testing.
