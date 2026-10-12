@@ -10,10 +10,13 @@ options considered; this file records what was actually built and why.
 Built: data pipeline, core maths (checked against Skyfield), propagation
 worker, map / sky / AR views, info card, passes list with calendar export,
 search, settings, calibration, night mode, PWA (manifest, icons, service
-worker, offline). Unit tests and Playwright end-to-end tests are green; CI and
+worker, offline), satellite trains (drawn and listed), "What's that?"
+identification by following a light in AR. Unit tests and Playwright end-to-end tests are green; CI and
 Pages workflows are written but **the repo has not been pushed** and has no
-GitHub remote. AR has only been exercised in headless Chrome (no sensors):
-**the orientation pipeline needs testing on real Android and iOS phones.**
+GitHub remote. AR has only been exercised in headless Chrome, driven by synthetic
+`deviceorientationabsolute` events (`e2e/ar.spec.ts`): that proves the
+pipeline is self-consistent with the W3C Euler-angle definitions, but **it
+still needs testing on real Android and iOS phones.**
 
 ```bash
 npm run check                 # eslint + tsc (both projects) + vitest
@@ -99,6 +102,24 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   vertical, pitch about the camera's own x axis).
 - **Refraction** is applied to everything drawn (stars, planets, satellites),
   geometric elevations everywhere else.
+- **Trains** are found per frame, not precomputed: satellites from one launch
+  (international designator prefix) within 120 days, sunlit, within 7° of a
+  neighbour and moving within 25° of the same direction, at least four
+  (`core/trains.ts`). Lit members count even when the magnitude filter hides
+  them individually, because a train is seen as a whole line. The passes
+  list's Trains tab chains same-launch visible passes that start within
+  3 minutes of each other, from launches in the last 30 days.
+- **Visible-pass searches only run in the dark** (`findVisiblePasses`): the
+  Sun-below-limit intervals, widened by 30 minutes so twilight-straddling
+  passes are found whole. About 1.7× faster; same passes to 0.25 s.
+- **"What's that?"** (`core/identify.ts`, `Engine.identify`) compares the
+  path the camera followed for 5 s with each lit candidate's predicted path
+  within 40° and brighter than mag 8, after removing a constant
+  heading/pitch offset. The score is a chi-square: residual / 0.5°, heading
+  offset / 10° (4° within 2 h of calibrating, 30° without a compass), pitch
+  offset / 3°, plus a faintness penalty. Geostationary satellites barely
+  move, so only position separates them; the UI says "not moving" below
+  0.6° of motion.
 - **No IndexedDB**: the service worker's caches hold the data; settings are a
   small validated JSON in localStorage.
 

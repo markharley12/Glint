@@ -10,10 +10,15 @@ loaded. (The name is provisional; the repository is `sat-ar`.)
 - **AR view** — the camera feed with the sky drawn over it, steered by your
   phone’s motion sensors. Calibrate on the Moon, a planet or a bright star to
   fix your compass.
+- **“What’s that?”** — saw something moving? Follow it with the phone for
+  five seconds and Glint works out which satellite it was from its path.
+- **Satellite trains** — the strings of new Starlinks (and other
+  constellations’ launches) are drawn as one line with one label, and listed
+  in Passes.
 - **Tap a dot** to see what it is, how high and bright it is, and when it
   next passes over — then jump there in time or add it to your calendar.
 - **Passes** — the bright satellites (ISS, Tiangong, Hubble, rocket bodies…)
-  you can see in the next 48 hours.
+  and satellite trains you can see in the next 48 hours.
 - **Time travel** — step or fast-forward the clock to preview tonight’s sky.
 - **Night mode** — red only, to keep your eyes dark-adapted.
 
