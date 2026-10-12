@@ -61,8 +61,17 @@ export interface ReferencePass {
   set: number
 }
 
+export interface ReferenceSky {
+  observer: string
+  target: string
+  ms: number
+  az: number
+  el: number
+}
+
 export const reference = {
   observers: skyfield.observers as Record<string, Observer>,
   looks: skyfield.looks as ReferenceLook[],
   passes: skyfield.passes as ReferencePass[],
+  sky: skyfield.sky as ReferenceSky[],
 }

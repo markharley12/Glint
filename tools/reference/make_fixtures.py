@@ -18,7 +18,7 @@ import json
 from datetime import timedelta
 from pathlib import Path
 
-from skyfield.api import EarthSatellite, Loader, wgs84
+from skyfield.api import EarthSatellite, Loader, Star, wgs84
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "src" / "core" / "fixtures"
@@ -114,6 +114,35 @@ def passes(sats):
     return out
 
 
+# Stars by their BSC5 J2000 position as src/data/sky.json stores it, so the
+# check covers our EQJ -> ENU rotation and not catalogue differences.
+STARS = {"Sirius": (101.2871, -16.7161), "Vega": (279.2346, 38.7836), "Polaris": (37.9529, 89.2642), "Acrux": (186.6496, -63.0992)}
+BODIES = {"Sun": "sun", "Moon": "moon", "Venus": "venus", "Jupiter": "jupiter barycenter", "Saturn": "saturn barycenter"}
+
+
+def sky():
+    """Apparent (aberrated, unrefracted) altaz of stars and bodies."""
+    out = []
+    times = ts.utc(2026, 10, 11, 12, [i * 97 for i in range(15)])
+    for name, (lat, lon, h) in OBSERVERS.items():
+        observer = earth + wgs84.latlon(lat, lon, elevation_m=h)
+        targets = {k: Star(ra_hours=ra / 15, dec_degrees=dec) for k, (ra, dec) in STARS.items()}
+        targets.update({k: eph[v] for k, v in BODIES.items()})
+        for target, obj in targets.items():
+            alt, az, dist = observer.at(times).observe(obj).apparent().altaz()
+            for i, t in enumerate(times):
+                out.append(
+                    {
+                        "observer": name,
+                        "target": target,
+                        "ms": ms(t),
+                        "az": round(float(az.degrees[i]), 6),
+                        "el": round(float(alt.degrees[i]), 6),
+                    }
+                )
+    return out
+
+
 def main():
     sats = satellites()
     data = {
@@ -121,10 +150,11 @@ def main():
         "observers": {k: {"latitude": v[0], "longitude": v[1], "height": v[2] / 1000} for k, v in OBSERVERS.items()},
         "looks": looks(sats),
         "passes": passes(sats),
+        "sky": sky(),
     }
     path = FIXTURES / "skyfield.json"
     path.write_text(json.dumps(data, separators=(",", ":")) + "\n")
-    print(f"wrote {path.relative_to(ROOT)}: {len(data['looks'])} looks, {len(data['passes'])} passes")
+    print(f"wrote {path.relative_to(ROOT)}: {len(data['looks'])} looks, {len(data['passes'])} passes, {len(data['sky'])} sky")
 
 
 if __name__ == "__main__":
