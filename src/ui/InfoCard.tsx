@@ -1,9 +1,10 @@
 /** Details of the selected satellite: where it is now, its next visible
  *  pass, and what it is. */
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useMemo, useState } from 'preact/hooks'
 import type { Look } from '../core/look.ts'
 import { displayName } from '../core/names.ts'
 import type { Pass } from '../core/passes.ts'
+import { launchKey, recentLaunch, TRAIN_MAX_AGE_MS } from '../core/trains.ts'
 import { clock } from '../state/clock.ts'
 import { observer } from '../state/observer.ts'
 import { settings } from '../state/settings.ts'
@@ -17,6 +18,14 @@ import { lookTowards } from './SkyView.tsx'
 
 const TYPE_WORDS = { payload: 'Satellite', 'rocket-body': 'Rocket stage', debris: 'Debris', unknown: 'Object' } as const
 
+/** "Launched 9 days ago with 25 others …" for recent multi-satellite launches. */
+function launchWords(launchedMs: number, now: number, others: number): string {
+  const days = Math.max(0, Math.floor((now - launchedMs) / 86_400_000))
+  const when = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
+  const hint = days <= 30 ? ': they may fly as a train, a line of lights following each other' : ''
+  return `Launched ${when} with ${others} others${hint}`
+}
+
 export function InfoCard() {
   const sel = selected.value
   const cat = catalog.value
@@ -27,6 +36,9 @@ export function InfoCard() {
   const obs = observer.value
   const [look, setLook] = useState<Look | null>(null)
   const [passes, setPasses] = useState<Pass[] | null>(null)
+  // Recently launched with others: they may still fly as a train.
+  const launch = info ? recentLaunch(info, now, TRAIN_MAX_AGE_MS) : null
+  const siblings = useMemo(() => (launch ? cat.sats.filter((s) => launchKey(s.intlDes) === launch).length - 1 : 0), [launch, cat.sats])
 
   useEffect(() => {
     if (sel === null || !obs) return
@@ -80,6 +92,7 @@ export function InfoCard() {
         </button>
       </header>
 
+      {siblings >= 3 && info.launch && <p class="card__sub">{launchWords(Date.parse(info.launch), now, siblings)}</p>}
       {look && (
         <p class="card__now">
           {up ? (
@@ -129,7 +142,7 @@ export function InfoCard() {
             </button>
             <button
               class="btn btn--ghost"
-              onClick={() => downloadPasses([nextVisible], new Map([[info.norad, info]]), `${info.norad}-pass.ics`)}
+              onClick={() => downloadPasses([{ pass: nextVisible, name: displayName(info) }], `${info.norad}-pass.ics`)}
               aria-label="Add the next visible pass to your calendar"
             >
               <Icon name="calendar" size={16} /> Calendar

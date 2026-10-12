@@ -11,7 +11,7 @@ import { horizontalToEnu, refraction } from '../core/frames.ts'
 import { displayName, isStation } from '../core/names.ts'
 import type { SatelliteInfo } from '../core/satellite.ts'
 import { getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
-import { findTrains, launchKey, trainName, type TrainCandidate } from '../core/trains.ts'
+import { findTrains, recentLaunch, TRAIN_MAX_AGE_MS, trainName, type TrainCandidate } from '../core/trains.ts'
 import { DEG, RAD, type Mat3, type Vec3 } from '../core/vec.ts'
 import type { Settings, ViewMode } from '../state/settings.ts'
 import { Slot, STRIDE } from '../worker/layout.ts'
@@ -74,9 +74,6 @@ function apparent(v: Vec3): Vec3 {
   const c = Math.cos(elA)
   return [(v[0] / h) * c, (v[1] / h) * c, Math.sin(elA)]
 }
-
-/** Launches older than this have spread out along their orbits. */
-const TRAIN_MAX_AGE_MS = 120 * 86_400_000
 
 /** A satellite placed on screen this frame, between the two drawing passes. */
 interface SatDrawable {
@@ -456,13 +453,7 @@ export class SkyRenderer {
   private recentLaunches(f: SkyFrame): (string | null)[] {
     const day = Math.floor(f.ms / 86_400_000)
     if (this.launchCache && this.launchCache.sats === f.sats && this.launchCache.day === day) return this.launchCache.keys
-    const keys = f.sats.map((s) => {
-      const key = launchKey(s.intlDes)
-      if (!key) return null
-      const launched = s.launch ? Date.parse(s.launch) : Number.NaN
-      const recent = Number.isFinite(launched) ? f.ms - launched < TRAIN_MAX_AGE_MS : s.groups.includes('last-30-days')
-      return recent ? key : null
-    })
+    const keys = f.sats.map((s) => recentLaunch(s, f.ms, TRAIN_MAX_AGE_MS))
     this.launchCache = { sats: f.sats, day, keys }
     return keys
   }

@@ -20,6 +20,7 @@ import { gstime } from 'satellite.js'
 import { EARTH_ROTATION, observerEcf, TopocentricFrame, type Observer } from './frames.ts'
 import { look, type Look } from './look.ts'
 import { jdFromMs, propagateJd, type Satellite } from './satellite.ts'
+import { sunElevationDeg, sunEnu, sunTemeAu } from './sun.ts'
 
 export interface PassPoint {
   ms: number
@@ -309,4 +310,63 @@ function visibleWindow(at: (ms: number) => Look | null, samples: Look[], opts: P
     max: toPoint(maxLook),
     brightest: brightest ? toPoint(brightest) : null,
   }
+}
+
+/** Sun-elevation sampling step for darkIntervals. The Sun's elevation
+ *  changes by at most ~2.5° in this time, so only a dip below the limit
+ *  shallower than that (a polar summer night grazing it) can be missed. */
+const DARK_STEP = 10 * 60_000
+
+/**
+ * The stretches of [startMs, endMs] when the Sun is at or below `maxSunEl`
+ * degrees for the observer, edges to within a second.
+ */
+export function darkIntervals(observer: Observer, startMs: number, endMs: number, maxSunEl: number): [number, number][] {
+  const frame = new TopocentricFrame(observer)
+  const dark = (ms: number): boolean => {
+    const jd = jdFromMs(ms)
+    frame.setGmst(gstime(jd))
+    return sunElevationDeg(sunEnu(frame, sunTemeAu(jd))) <= maxSunEl
+  }
+  const out: [number, number][] = []
+  let open: number | null = dark(startMs) ? startMs : null
+  for (let t = startMs; t < endMs; ) {
+    const next = Math.min(t + DARK_STEP, endMs)
+    const d = dark(next)
+    if (open === null && d) open = bisect(t, next, dark)
+    else if (open !== null && !d) {
+      out.push([open, bisect(t, next, dark)])
+      open = null
+    }
+    t = next
+  }
+  if (open !== null) out.push([open, endMs])
+  return out
+}
+
+/** Longest LEO pass, ms: dark intervals are widened by this much so that
+ *  passes running into or out of twilight are found whole. */
+const PASS_MARGIN = 30 * 60_000
+
+/**
+ * The passes with a visible stretch. Only searches while the sky is dark
+ * (plus a margin), which halves the work of findPasses at mid-latitudes.
+ */
+export function findVisiblePasses(
+  sat: Satellite,
+  observer: Observer,
+  startMs: number,
+  endMs: number,
+  options: Partial<PassOptions> = {},
+): Pass[] {
+  const opts = { ...DEFAULT_PASS_OPTIONS, ...options }
+  const windows: [number, number][] = []
+  for (const [a, b] of darkIntervals(observer, startMs, endMs, opts.maxSunEl)) {
+    const lo = Math.max(startMs, a - PASS_MARGIN)
+    const hi = Math.min(endMs, b + PASS_MARGIN)
+    const last = windows[windows.length - 1]
+    if (last && lo <= last[1]) last[1] = hi
+    else windows.push([lo, hi])
+  }
+  return windows.flatMap(([a, b]) => findPasses(sat, observer, a, b, opts).filter((p) => p.visible))
 }

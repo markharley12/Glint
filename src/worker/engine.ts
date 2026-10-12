@@ -14,7 +14,7 @@
 import { gstime } from 'satellite.js'
 import { observerEcf, TopocentricFrame, type Observer } from '../core/frames.ts'
 import { apparentMagnitude, phaseAngle } from '../core/magnitude.ts'
-import { findPasses, maxAngularRate, riseDelay, type Pass, type PassOptions } from '../core/passes.ts'
+import { findPasses, findVisiblePasses, maxAngularRate, riseDelay, type Pass, type PassOptions } from '../core/passes.ts'
 import { look, type Look } from '../core/look.ts'
 import { jdFromMs, propagateJd, type Satellite } from '../core/satellite.ts'
 import { sunEnu, sunlitFraction, sunTemeAu } from '../core/sun.ts'
@@ -140,9 +140,8 @@ export class Engine {
     const list = norads ? norads.map((n) => this.satellite(n)).filter((s): s is Satellite => !!s) : this.sats
     const out: Pass[] = []
     for (const sat of list) {
-      for (const p of findPasses(sat, this.observer, startMs, endMs, options)) {
-        if (!visibleOnly || p.visible) out.push(p)
-      }
+      if (visibleOnly) out.push(...findVisiblePasses(sat, this.observer, startMs, endMs, options))
+      else out.push(...findPasses(sat, this.observer, startMs, endMs, options))
     }
     return out.sort((a, b) => (a.visible?.start.ms ?? a.rise.ms) - (b.visible?.start.ms ?? b.rise.ms))
   }

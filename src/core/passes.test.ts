@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { fixtureSatellites, reference } from './fixtures/index.ts'
-import { findPasses, type Pass } from './passes.ts'
+import { gstime } from 'satellite.js'
+import { TopocentricFrame } from './frames.ts'
+import { darkIntervals, findPasses, findVisiblePasses, type Pass } from './passes.ts'
+import { jdFromMs } from './satellite.ts'
+import { sunElevationDeg, sunEnu, sunTemeAu } from './sun.ts'
 
 const sats = fixtureSatellites()
 const START = Date.UTC(2026, 9, 11, 12, 0, 0)
@@ -94,5 +98,38 @@ describe('findPasses', () => {
     for (let i = 0; i < 5; i++) findPasses(sats.get(44714)!, greenwich, START, END)
     // Generous for slow CI machines; a fixed 10 s step takes ~10× longer.
     expect((performance.now() - t0) / 5).toBeLessThan(200)
+  })
+})
+
+describe('darkIntervals and findVisiblePasses', () => {
+  const greenwich = reference.observers.greenwich!
+  const frame = new TopocentricFrame(greenwich)
+  const sunEl = (ms: number) => {
+    const jd = jdFromMs(ms)
+    frame.setGmst(gstime(jd))
+    return sunElevationDeg(sunEnu(frame, sunTemeAu(jd)))
+  }
+
+  it('brackets each night at the given solar elevation', () => {
+    const nights = darkIntervals(greenwich, START, END, -6)
+    // Three October nights in London, about 11 h each.
+    expect(nights).toHaveLength(3)
+    for (const [a, b] of nights) {
+      expect(sunEl(a)).toBeCloseTo(-6, 1)
+      expect(sunEl(b)).toBeCloseTo(-6, 1)
+      expect(sunEl((a + b) / 2)).toBeLessThan(-6)
+      expect((b - a) / 3_600_000).toBeGreaterThan(10)
+      expect((b - a) / 3_600_000).toBeLessThan(13)
+    }
+  })
+
+  it('finds the same visible passes as a full search', () => {
+    for (const norad of [25544, 20580, 44714]) {
+      const all = findPasses(sats.get(norad)!, greenwich, START, END).filter((p) => p.visible)
+      const dark = findVisiblePasses(sats.get(norad)!, greenwich, START, END)
+      expect(dark).toHaveLength(all.length)
+      // Different sample grids, so the bisected edges differ by up to its tolerance.
+      dark.forEach((p, k) => expect(Math.abs(p.visible!.start.ms - all[k]!.visible!.start.ms)).toBeLessThan(250))
+    }
   })
 })
