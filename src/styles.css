@@ -294,6 +294,11 @@ p {
   color: var(--text);
 }
 
+.btn--ghost.btn--on {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--accent);
+}
+
 .btn--big {
   padding: 14px 22px;
   font-size: 17px;
@@ -803,4 +808,24 @@ input[type='range'] {
   font: inherit;
   text-decoration: underline;
   cursor: pointer;
+}
+
+.shortcuts {
+  border-collapse: collapse;
+  margin: 6px 0;
+}
+
+.shortcuts th {
+  text-align: left;
+  font-weight: normal;
+  padding: 3px 12px 3px 0;
+  white-space: nowrap;
+}
+
+kbd {
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  background: var(--chip);
+  border-radius: 4px;
+  padding: 1px 5px;
 }

@@ -64,8 +64,19 @@ export interface RenderStats {
   selectedOnScreen: boolean | null
 }
 
+/** Satellite `i`'s position relative to the observer (ENU km) at `ms`,
+ *  extrapolated from the tick, or null if the tick has it below the
+ *  horizon unpropagated. */
+export function satellitePosition(tick: TickData, i: number, ms: number): Vec3 | null {
+  const o = i * STRIDE
+  const b = tick.buffer
+  if (o + STRIDE > b.length || Number.isNaN(b[o]!)) return null
+  const dt = (ms - tick.ms) / 1000
+  return [b[o]! + b[o + Slot.VE]! * dt, b[o + Slot.N]! + b[o + Slot.VN]! * dt, b[o + Slot.U]! + b[o + Slot.VU]! * dt]
+}
+
 /** Geometric ENU direction → apparent (refracted) unit vector. */
-function apparent(v: Vec3): Vec3 {
+export function apparent(v: Vec3): Vec3 {
   const h = Math.hypot(v[0], v[1])
   const r = Math.hypot(h, v[2])
   const el = Math.asin(v[2] / r) * RAD
@@ -649,14 +660,8 @@ export class SkyRenderer {
     if (!tick) return
     const i = f.sats.findIndex((s) => s.norad === f.selected)
     if (i < 0) return
-    const o = i * STRIDE
-    if (Number.isNaN(tick.buffer[o]!)) return
-    const dt = (f.ms - tick.ms) / 1000
-    const v: Vec3 = [
-      tick.buffer[o]! + tick.buffer[o + Slot.VE]! * dt,
-      tick.buffer[o + Slot.N]! + tick.buffer[o + Slot.VN]! * dt,
-      tick.buffer[o + Slot.U]! + tick.buffer[o + Slot.VU]! * dt,
-    ]
+    const v = satellitePosition(tick, i, f.ms)
+    if (!v) return
     const c = pr.toCamera(v)
     // Direction on screen (y down); behind the camera the x/y components
     // still say which way to turn.

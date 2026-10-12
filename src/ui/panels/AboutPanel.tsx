@@ -1,5 +1,6 @@
 import { APP_NAME, TAGLINE } from '../../app-info.ts'
 import { catalog } from '../../state/tracker.ts'
+import { SHORTCUTS } from '../keyboard.ts'
 import { Sheet } from '../Sheet.tsx'
 
 export function AboutPanel() {
@@ -22,6 +23,21 @@ export function AboutPanel() {
         Positions come from public orbital elements and the standard SGP4 model, checked against the Skyfield library to within a few arcseconds. In AR, your
         phone’s compass is the weak link — often 5–15° out. Calibrate on the Moon, a planet or a bright star to fix it.
       </p>
+      <details>
+        <summary>Keyboard shortcuts</summary>
+        <table class="shortcuts small">
+          <tbody>
+            {SHORTCUTS.map(([keys, what]) => (
+              <tr key={keys}>
+                <th scope="row">
+                  <kbd>{keys}</kbd>
+                </th>
+                <td>{what}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </details>
       <h3>Credits</h3>
       <ul class="small">
         {sources.map((s) => (

@@ -6,6 +6,9 @@ import type { RenderStats } from '../sky/renderer.ts'
 /** Where the planetarium view looks, degrees. */
 export const lookDirection = signal({ az: 180, el: 25 })
 
+/** The planetarium view keeps the selected satellite centred. */
+export const following = signal(false)
+
 /** The selected satellite's path across the sky around now. */
 export interface TrackState {
   norad: number

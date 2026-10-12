@@ -7,6 +7,7 @@ import { panel, toast } from '../state/view.ts'
 import { ArOverlay } from './ArOverlay.tsx'
 import { BottomNav } from './BottomNav.tsx'
 import { InfoCard } from './InfoCard.tsx'
+import { installKeyboard } from './keyboard.ts'
 import { LocationPrompt } from './LocationPrompt.tsx'
 import { AboutPanel } from './panels/AboutPanel.tsx'
 import { PassesPanel } from './panels/PassesPanel.tsx'
@@ -22,6 +23,8 @@ export function App() {
   useEffect(() => {
     document.documentElement.classList.toggle('night', s.night)
   }, [s.night])
+
+  useEffect(() => installKeyboard(), [])
 
   const p = panel.value
   // Calibrating or identifying takes over the AR view: just the sky and

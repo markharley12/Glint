@@ -12,7 +12,9 @@ export function TimeBar() {
   const rate = clock.rate.value
   const paused = clock.paused.value
   const real = useWallClock(500)
-  const offsetText = live ? 'Live' : relative(now, real).replace(/^in /, '+').replace(/ ago$/, ' ago')
+  // One short line: "Live", an offset within today, or the day.
+  const day = dayLabel(now, real)
+  const sub = live ? 'Live' : day !== 'Today' ? day : relative(now, real).replace(/^in /, '+')
   const nextRate = RATES[(RATES.indexOf(rate) + 1) % RATES.length] ?? 1
 
   return (
@@ -30,10 +32,7 @@ export function TimeBar() {
         data-testid="time"
       >
         <span class="timebar__clock">{clockTime(now, true)}</span>
-        <span class="timebar__sub">
-          {dayLabel(now, real) !== 'Today' && `${dayLabel(now, real)} · `}
-          {offsetText}
-        </span>
+        <span class="timebar__sub">{sub}</span>
       </button>
       <button class="time-btn" onClick={() => clock.set(clock.now() + 600_000)} aria-label="Forward ten minutes">
         +10m

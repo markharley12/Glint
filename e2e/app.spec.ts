@@ -50,7 +50,8 @@ test('steps time and returns to live', async ({ page }) => {
   const time = page.getByTestId('time')
   await expect(time).toContainText('Live')
   await page.getByRole('button', { name: 'Forward one hour' }).click()
-  await expect(time).toContainText('+1 h')
+  // Late in the evening an hour on is tomorrow.
+  await expect(time).toContainText(/\+1 h|Tomorrow/)
   await time.click()
   await expect(time).toContainText('Live')
 })

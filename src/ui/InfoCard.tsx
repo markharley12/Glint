@@ -9,6 +9,7 @@ import { clock } from '../state/clock.ts'
 import { observer } from '../state/observer.ts'
 import { settings } from '../state/settings.ts'
 import { catalog, getTracker, indexByNorad, selected } from '../state/tracker.ts'
+import { following } from '../state/view.ts'
 import { downloadPasses } from './download.ts'
 import { age, brightnessWords, clockTime, compass, dayLabel, km, magnitude, relative } from './format.ts'
 import { useNow } from './hooks.ts'
@@ -150,8 +151,18 @@ export function InfoCard() {
           </>
         )}
         {mode === 'sky' && look && up && (
-          <button class="btn btn--ghost" onClick={() => lookTowards(look.az, look.el)}>
-            <Icon name="target" size={16} /> Point at it
+          <button
+            class={`btn btn--ghost ${following.value ? 'btn--on' : ''}`}
+            aria-pressed={following.value}
+            onClick={() => {
+              if (following.value) following.value = false
+              else {
+                lookTowards(look.az, look.el)
+                following.value = true
+              }
+            }}
+          >
+            <Icon name="target" size={16} /> {following.value ? 'Following' : 'Follow'}
           </button>
         )}
       </div>

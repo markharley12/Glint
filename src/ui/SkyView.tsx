@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef } from 'preact/hooks'
 import { declination } from '../core/declination.ts'
+import { enuToHorizontal } from '../core/frames.ts'
 import { clamp, quat, type Quat } from '../core/vec.ts'
 import { coverFocalLength } from '../sensors/camera.ts'
 import { correct, OrientationFilter, screenAdjust } from '../sensors/orientation-math.ts'
@@ -14,15 +15,15 @@ import { screenAngle } from '../sensors/orientation.ts'
 import { CelestialCache } from '../sky/celestial.ts'
 import { NIGHT, NORMAL } from '../sky/palette.ts'
 import { lookAt, PerspectiveProjector, PolarProjector, type Projector } from '../sky/projection.ts'
-import { SkyRenderer, type HitTarget } from '../sky/renderer.ts'
+import { apparent, satellitePosition, SkyRenderer, type HitTarget } from '../sky/renderer.ts'
 import { orientation, registerVideo } from '../state/ar.ts'
 import { calibrating, calibrationTarget } from '../state/calibration.ts'
 import { clock } from '../state/clock.ts'
 import { recordPointing } from '../state/identify.ts'
 import { observer } from '../state/observer.ts'
 import { settings, updateSettings } from '../state/settings.ts'
-import { catalog, getTracker, selected } from '../state/tracker.ts'
-import { lookDirection, renderStats, tooltip, track } from '../state/view.ts'
+import { catalog, getTracker, indexByNorad, selected } from '../state/tracker.ts'
+import { following, lookDirection, renderStats, tooltip, track } from '../state/view.ts'
 
 /** How far the track reaches either side of now. */
 const TRACK_BEFORE_MS = 8 * 60_000
@@ -133,10 +134,27 @@ export function SkyView() {
         .catch(() => undefined)
     }
 
+    /** In the Sky view, keep the followed satellite centred. */
+    const follow = (now: number) => {
+      if (!following.peek()) return
+      const sel = selected.peek()
+      const tick = tracker.latest
+      const i = sel === null ? undefined : indexByNorad.peek().get(sel)
+      if (i === undefined || settings.peek().view !== 'sky') {
+        following.value = false
+        return
+      }
+      const v = tick && satellitePosition(tick, i, now)
+      if (!v) return // below the horizon, or not computed yet: hold still
+      const { az, el } = enuToHorizontal(apparent(v))
+      lookDirection.value = { az, el: clamp(el, -20, 90) }
+    }
+
     const frame = () => {
       raf = requestAnimationFrame(frame)
       const now = clock.now()
       tracker.pump(now)
+      follow(now)
       const o = observer.peek()
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       if (!o) {
@@ -217,6 +235,7 @@ export function SkyView() {
         return
       }
       if (pointers.size !== 1) return
+      if (moved) following.value = false
       // "Grab the sky": dragging right turns the view left.
       const pxPerDeg = height / 2 / Math.tan((s.skyFovDeg * Math.PI) / 360) * (Math.PI / 180)
       const { az, el } = lookDirection.peek()
