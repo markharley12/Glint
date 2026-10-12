@@ -23,6 +23,7 @@ export interface Palette {
   station: string
   selected: string
   track: string
+  train: string
   label: string
   labelHalo: string
   moonDark: string
@@ -51,6 +52,7 @@ export const NORMAL: Palette = {
   station: '#ffcf4a',
   selected: '#4fd8ff',
   track: 'rgba(79, 216, 255, 0.75)',
+  train: '#c4a3ff',
   label: '#e9eef6',
   labelHalo: 'rgba(0, 0, 0, 0.85)',
   moonDark: 'rgba(60, 64, 72, 0.9)',
@@ -85,6 +87,7 @@ export const NIGHT: Palette = {
   station: '#ff6a3a',
   selected: '#ff8a5a',
   track: 'rgba(255, 110, 70, 0.7)',
+  train: '#ff7a4a',
   label: '#e03a28',
   labelHalo: 'rgba(0, 0, 0, 0.9)',
   moonDark: 'rgba(40, 6, 4, 0.9)',

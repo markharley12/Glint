@@ -11,6 +11,7 @@ import { horizontalToEnu, refraction } from '../core/frames.ts'
 import { displayName, isStation } from '../core/names.ts'
 import type { SatelliteInfo } from '../core/satellite.ts'
 import { getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
+import { findTrains, launchKey, trainName, type TrainCandidate } from '../core/trains.ts'
 import { DEG, RAD, type Mat3, type Vec3 } from '../core/vec.ts'
 import type { Settings, ViewMode } from '../state/settings.ts'
 import { Slot, STRIDE } from '../worker/layout.ts'
@@ -18,7 +19,7 @@ import type { TickData, TrackPoint } from '../worker/protocol.ts'
 import { placeLabels, type LabelRequest } from './labels.ts'
 import { skyColour, starColour, type Palette } from './palette.ts'
 import { PerspectiveProjector, PolarProjector, type Point, type Projector } from './projection.ts'
-import { appearance, satRadius, starRadius } from './visibility.ts'
+import { appearance, DARK_ENOUGH_SUN_EL, satRadius, starRadius } from './visibility.ts'
 
 export interface SkyFrame {
   ms: number
@@ -74,6 +75,26 @@ function apparent(v: Vec3): Vec3 {
   return [(v[0] / h) * c, (v[1] / h) * c, Math.sin(elA)]
 }
 
+/** Launches older than this have spread out along their orbits. */
+const TRAIN_MAX_AGE_MS = 120 * 86_400_000
+
+/** A satellite placed on screen this frame, between the two drawing passes. */
+interface SatDrawable {
+  index: number
+  x: number
+  y: number
+  r: number
+  trail: Point | null
+  sunlit: number
+  mag: number
+  visible: boolean
+  station: boolean
+  selected: boolean
+  /** Hidden by the show filter, but placed in case it belongs to a train:
+   *  drawn only if it does. */
+  trainOnly: boolean
+}
+
 /** Trail length behind each satellite: this many seconds of motion, but
  *  no longer than TRAIL_MAX_PX on screen. */
 const TRAIL_S = 15
@@ -91,6 +112,7 @@ export class SkyRenderer {
   stats: RenderStats = { up: 0, visible: 0, drawn: 0, selectedOnScreen: null }
   private p: Point = { x: 0, y: 0 }
   private q: Point = { x: 0, y: 0 }
+  private launchCache: { sats: SatelliteInfo[]; day: number; keys: (string | null)[] } | null = null
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx
@@ -429,6 +451,22 @@ export class SkyRenderer {
     }
   }
 
+  /** Launch key per satellite if it launched recently enough to still be
+   *  in a train, else null. Cached per catalogue and day. */
+  private recentLaunches(f: SkyFrame): (string | null)[] {
+    const day = Math.floor(f.ms / 86_400_000)
+    if (this.launchCache && this.launchCache.sats === f.sats && this.launchCache.day === day) return this.launchCache.keys
+    const keys = f.sats.map((s) => {
+      const key = launchKey(s.intlDes)
+      if (!key) return null
+      const launched = s.launch ? Date.parse(s.launch) : Number.NaN
+      const recent = Number.isFinite(launched) ? f.ms - launched < TRAIN_MAX_AGE_MS : s.groups.includes('last-30-days')
+      return recent ? key : null
+    })
+    this.launchCache = { sats: f.sats, day, keys }
+    return keys
+  }
+
   private drawSatellites(f: SkyFrame, labels: LabelRequest[]): void {
     const { tick, sats, settings } = f
     if (!tick) return
@@ -439,14 +477,21 @@ export class SkyRenderer {
     const many = settings.labels === 'many'
     const labelsOn = settings.labels !== 'none'
     const n = Math.min(sats.length, buf.length / STRIDE)
-    let selectedDrawn: Point | null = null
+    const launches = this.recentLaunches(f)
+
+    // Pass 1: where everything goes.
+    const drawn: SatDrawable[] = []
+    const candidates: TrainCandidate[] = []
     for (let i = 0; i < n; i++) {
       const o = i * STRIDE
       const x0 = buf[o]!
       if (Number.isNaN(x0)) continue
-      const e = x0 + buf[o + Slot.VE]! * dt
-      const nn = buf[o + Slot.N]! + buf[o + Slot.VN]! * dt
-      const u = buf[o + Slot.U]! + buf[o + Slot.VU]! * dt
+      const ve = buf[o + Slot.VE]!
+      const vn = buf[o + Slot.VN]!
+      const vu = buf[o + Slot.VU]!
+      const e = x0 + ve * dt
+      const nn = buf[o + Slot.N]! + vn * dt
+      const u = buf[o + Slot.U]! + vu * dt
       const range = Math.hypot(e, nn, u)
       // Cheap reject well below the horizon before any trig.
       if (u / range < -0.015) continue
@@ -459,7 +504,12 @@ export class SkyRenderer {
       const look = appearance(settings.show, sunlit, mag, f.sunEl, settings.limitingMag)
       if (look.shown) this.stats.up++
       if (look.visible) this.stats.visible++
-      if (!look.shown && !isSelected) continue
+      const launch = launches[i]
+      // A train is seen as a whole line of lights even when its members are
+      // individually below the magnitude filter, so lit members of recent
+      // launches stay in the running.
+      const trainOnly = !look.shown && !isSelected
+      if (trainOnly && !(launch && sunlit >= 0.5 && f.sunEl <= DARK_ENOUGH_SUN_EL)) continue
       if (!pr.project(v, p)) {
         if (isSelected) this.stats.selectedOnScreen = false
         continue
@@ -472,60 +522,111 @@ export class SkyRenderer {
       const r = satRadius(mag) + (station ? 0.6 : 0)
       // A short trail behind each satellite: shows which way it is going and
       // tells satellites apart from stars at a glance.
-      const back = apparent([e - buf[o + Slot.VE]! * TRAIL_S, nn - buf[o + Slot.VN]! * TRAIL_S, u - buf[o + Slot.VU]! * TRAIL_S])
+      let trail: Point | null = null
+      const back = apparent([e - ve * TRAIL_S, nn - vn * TRAIL_S, u - vu * TRAIL_S])
       if (pr.project(back, this.q)) {
-        let tx = this.q.x - p.x
-        let ty = this.q.y - p.y
+        const tx = this.q.x - p.x
+        const ty = this.q.y - p.y
         const len = Math.hypot(tx, ty)
         if (len > 2) {
           const k = Math.min(1, TRAIL_MAX_PX / len)
-          tx *= k
-          ty *= k
-          ctx.beginPath()
-          ctx.moveTo(p.x, p.y)
-          ctx.lineTo(p.x + tx, p.y + ty)
-          ctx.strokeStyle = look.visible || station ? f.palette.sunlit : f.palette.sunlitFaint
-          ctx.globalAlpha = 0.55
-          ctx.lineWidth = Math.max(1.2, r * 0.9)
-          ctx.stroke()
-          ctx.globalAlpha = 1
+          trail = { x: p.x + tx * k, y: p.y + ty * k }
         }
+      }
+      drawn.push({ index: i, x: p.x, y: p.y, r, trail, sunlit, mag, visible: look.visible, station, selected: isSelected, trainOnly })
+      if (launch) {
+        // Motion across the sky: velocity minus its line-of-sight part.
+        const along = (ve * v[0] + vn * v[1] + vu * v[2])
+        candidates.push({ index: drawn.length - 1, launch, dir: v, motion: [ve - along * v[0], vn - along * v[1], vu - along * v[2]] })
+      }
+    }
+
+    // Trains: one line and one label each, drawn under the dots.
+    const trains = findTrains(candidates)
+    const inTrain = new Set<number>()
+    for (const t of trains) {
+      ctx.beginPath()
+      t.members.forEach((m, k) => {
+        const d = drawn[m]!
+        inTrain.add(m)
+        if (k === 0) ctx.moveTo(d.x, d.y)
+        else ctx.lineTo(d.x, d.y)
+      })
+      ctx.strokeStyle = f.palette.train
+      ctx.globalAlpha = 0.6
+      ctx.lineWidth = 3
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      ctx.stroke()
+      ctx.globalAlpha = 1
+      const lead = drawn[t.members[0]!]!
+      const names = t.members.map((m) => sats[drawn[m]!.index]!.name)
+      const brightest = Math.min(...t.members.map((m) => drawn[m]!.mag).filter((x) => !Number.isNaN(x)), 99)
+      if (labelsOn) {
+        labels.push({
+          text: `${trainName(names, t.launch)} ×${t.members.length}`,
+          x: lead.x,
+          y: lead.y,
+          gap: lead.r + 2,
+          priority: 200 + (10 - brightest),
+          colour: f.palette.train,
+        })
+      }
+    }
+
+    // Pass 2: trails, dots and labels.
+    let selectedDrawn: SatDrawable | null = null
+    drawn.forEach((d, k) => {
+      if (d.trainOnly && !inTrain.has(k)) return
+      const sat = sats[d.index]!
+      if (d.trail) {
+        ctx.beginPath()
+        ctx.moveTo(d.x, d.y)
+        ctx.lineTo(d.trail.x, d.trail.y)
+        ctx.strokeStyle = d.visible || d.station ? f.palette.sunlit : f.palette.sunlitFaint
+        ctx.globalAlpha = 0.55
+        ctx.lineWidth = Math.max(1.2, d.r * 0.9)
+        ctx.lineCap = 'butt'
+        ctx.stroke()
+        ctx.globalAlpha = 1
       }
       // A dark halo separates the dot from stars and constellation lines.
       ctx.beginPath()
-      ctx.arc(p.x, p.y, r + 1.6, 0, 2 * Math.PI)
+      ctx.arc(d.x, d.y, d.r + 1.6, 0, 2 * Math.PI)
       ctx.fillStyle = f.palette.labelHalo
       ctx.fill()
       ctx.beginPath()
-      ctx.arc(p.x, p.y, r, 0, 2 * Math.PI)
-      ctx.fillStyle = isSelected
+      ctx.arc(d.x, d.y, d.r, 0, 2 * Math.PI)
+      ctx.fillStyle = d.selected
         ? f.palette.selected
-        : station
+        : d.station
           ? f.palette.station
-          : look.visible
+          : d.visible
             ? f.palette.sunlit
-            : sunlit >= 0.5
+            : d.sunlit >= 0.5
               ? f.palette.sunlitFaint
               : f.palette.eclipsed
       ctx.fill()
       this.stats.drawn++
-      const brightness = Number.isNaN(mag) ? 0 : 10 - mag
-      this.hits.push({ kind: 'sat', id: sat.norad, x: p.x, y: p.y, r, priority: (look.visible ? 20 : 0) + brightness + (station ? 30 : 0) })
-      if (isSelected) selectedDrawn = { x: p.x, y: p.y }
-      if (labelsOn && (station || look.visible || many || isSelected)) {
+      const brightness = Number.isNaN(d.mag) ? 0 : 10 - d.mag
+      this.hits.push({ kind: 'sat', id: sat.norad, x: d.x, y: d.y, r: d.r, priority: (d.visible ? 20 : 0) + brightness + (d.station ? 30 : 0) })
+      if (d.selected) selectedDrawn = d
+      // Train members are covered by their train's label, unless selected.
+      if (labelsOn && (d.station || d.visible || many || d.selected) && (!inTrain.has(k) || d.selected)) {
         labels.push({
           text: displayName(sat),
-          x: p.x,
-          y: p.y,
-          gap: r + 1,
-          priority: (isSelected ? 1000 : 0) + (station ? 100 : 0) + brightness,
-          colour: isSelected ? f.palette.selected : station ? f.palette.station : f.palette.label,
+          x: d.x,
+          y: d.y,
+          gap: d.r + 1,
+          priority: (d.selected ? 1000 : 0) + (d.station ? 100 : 0) + brightness,
+          colour: d.selected ? f.palette.selected : d.station ? f.palette.station : f.palette.label,
         })
       }
-    }
+    })
     if (selectedDrawn) {
+      const d: SatDrawable = selectedDrawn
       ctx.beginPath()
-      ctx.arc(selectedDrawn.x, selectedDrawn.y, 9, 0, 2 * Math.PI)
+      ctx.arc(d.x, d.y, 9, 0, 2 * Math.PI)
       ctx.strokeStyle = f.palette.selected
       ctx.lineWidth = 2
       ctx.stroke()
