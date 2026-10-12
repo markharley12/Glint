@@ -103,6 +103,22 @@ interface SatDrawable {
   trainOnly: boolean
 }
 
+/** The sky turns this fast, degrees per millisecond (sidereal rate). */
+const SIDEREAL_DEG_PER_MS = 360 / 86_164_090.5
+/** Redraw the cached star layer once the sky has turned this far on
+ *  screen, px. */
+const LAYER_MAX_DRIFT_PX = 0.25
+
+/** The slow-changing background (sky colour, grid, constellations, stars),
+ *  drawn once into its own canvas and reused while the view holds still. */
+interface SkyLayer {
+  canvas: HTMLCanvasElement
+  ctx: CanvasRenderingContext2D
+  key: string
+  ms: number
+  hits: HitTarget[]
+}
+
 /** Trail length behind each satellite: this many seconds of motion, but
  *  no longer than TRAIL_MAX_PX on screen. */
 const TRAIL_S = 15
@@ -121,6 +137,9 @@ export class SkyRenderer {
   private p: Point = { x: 0, y: 0 }
   private q: Point = { x: 0, y: 0 }
   private launchCache: { sats: SatelliteInfo[]; day: number; keys: (string | null)[] } | null = null
+  private layer: SkyLayer | null = null
+  /** Times the star layer was redrawn, for tests and tuning. */
+  layerDraws = 0
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.ctx = ctx
@@ -133,16 +152,9 @@ export class SkyRenderer {
     this.stats = { up: 0, visible: 0, drawn: 0, selectedOnScreen: null }
     ctx.clearRect(0, 0, pr.width, pr.height)
 
-    this.drawBackground(f)
+    this.drawSkyLayer(f)
     ctx.save()
-    if (pr instanceof PolarProjector) {
-      ctx.beginPath()
-      ctx.arc(pr.cx, pr.cy, pr.radius, 0, 2 * Math.PI)
-      ctx.clip()
-    }
-    if (f.settings.grid) this.drawGrid(f)
-    if (f.settings.constellations && f.mode !== 'ar') this.drawConstellations(f)
-    this.drawStars(f)
+    this.clipToSky(pr)
     const labels: LabelRequest[] = []
     this.drawBodies(f, labels)
     if (f.track) this.drawTrack(f)
@@ -157,6 +169,70 @@ export class SkyRenderer {
     if (pr instanceof PerspectiveProjector && f.selected !== null && this.stats.selectedOnScreen === false) {
       this.drawOffscreenArrow(f, pr)
     }
+  }
+
+  private clipToSky(pr: Projector): void {
+    if (!(pr instanceof PolarProjector)) return
+    const { ctx } = this
+    ctx.beginPath()
+    ctx.arc(pr.cx, pr.cy, pr.radius, 0, 2 * Math.PI)
+    ctx.clip()
+  }
+
+  /** Background, grid, constellations and stars. In AR the view moves
+   *  every frame, so they are drawn directly; otherwise into a cached layer
+   *  that is redrawn only when the view, the settings or the sky's
+   *  brightness change, or the sky has turned a fraction of a pixel. */
+  private drawSkyLayer(f: SkyFrame): void {
+    const pr = f.projector
+    const draw = () => {
+      this.drawBackground(f)
+      this.ctx.save()
+      this.clipToSky(pr)
+      if (f.settings.grid) this.drawGrid(f)
+      if (f.settings.constellations && f.mode !== 'ar') this.drawConstellations(f)
+      this.drawStars(f)
+      this.ctx.restore()
+    }
+    if (f.mode === 'ar') {
+      draw()
+      return
+    }
+    const main = this.ctx
+    const dpr = main.getTransform().a || 1
+    const s = f.settings
+    const view = pr instanceof PerspectiveProjector ? `${pr.orientation.join(',')}:${pr.f}` : 'polar'
+    const key = [pr.width, pr.height, dpr, view, f.palette.page, s.grid, s.constellations, s.starMag, Math.round(f.sunEl * 4)].join('|')
+    const maxAgeMs = LAYER_MAX_DRIFT_PX / (pr.pxPerDeg * SIDEREAL_DEG_PER_MS)
+    let layer = this.layer
+    if (layer && layer.key === key && Math.abs(f.ms - layer.ms) < maxAgeMs) {
+      this.hits.push(...layer.hits)
+    } else {
+      if (!layer) {
+        const canvas = document.createElement('canvas')
+        layer = this.layer = { canvas, ctx: canvas.getContext('2d')!, key: '', ms: 0, hits: [] }
+      }
+      const w = Math.round(pr.width * dpr)
+      const h = Math.round(pr.height * dpr)
+      if (layer.canvas.width !== w || layer.canvas.height !== h) {
+        layer.canvas.width = w
+        layer.canvas.height = h
+      }
+      layer.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      layer.ctx.clearRect(0, 0, pr.width, pr.height)
+      const before = this.hits.length
+      this.ctx = layer.ctx
+      try {
+        draw()
+      } finally {
+        this.ctx = main
+      }
+      layer.hits = this.hits.slice(before)
+      layer.key = key
+      layer.ms = f.ms
+      this.layerDraws++
+    }
+    main.drawImage(layer.canvas, 0, 0, pr.width, pr.height)
   }
 
   // --- background, ground and grid -----------------------------------------
@@ -548,11 +624,13 @@ export class SkyRenderer {
     // Trains: one line and one label each, drawn under the dots.
     const trains = findTrains(candidates)
     const inTrain = new Set<number>()
+    const inTrainIndex = new Set<number>()
     for (const t of trains) {
       ctx.beginPath()
       t.members.forEach((m, k) => {
         const d = drawn[m]!
         inTrain.add(m)
+        inTrainIndex.add(d.index)
         if (k === 0) ctx.moveTo(d.x, d.y)
         else ctx.lineTo(d.x, d.y)
       })
@@ -578,30 +656,11 @@ export class SkyRenderer {
       }
     }
 
-    // Pass 2: trails, dots and labels.
-    let selectedDrawn: SatDrawable | null = null
-    drawn.forEach((d, k) => {
-      if (d.trainOnly && !inTrain.has(k)) return
-      const sat = sats[d.index]!
-      if (d.trail) {
-        ctx.beginPath()
-        ctx.moveTo(d.x, d.y)
-        ctx.lineTo(d.trail.x, d.trail.y)
-        ctx.strokeStyle = d.visible || d.station ? f.palette.sunlit : f.palette.sunlitFaint
-        ctx.globalAlpha = 0.55
-        ctx.lineWidth = Math.max(1.2, d.r * 0.9)
-        ctx.lineCap = 'butt'
-        ctx.stroke()
-        ctx.globalAlpha = 1
-      }
-      // A dark halo separates the dot from stars and constellation lines.
-      ctx.beginPath()
-      ctx.arc(d.x, d.y, d.r + 1.6, 0, 2 * Math.PI)
-      ctx.fillStyle = f.palette.labelHalo
-      ctx.fill()
-      ctx.beginPath()
-      ctx.arc(d.x, d.y, d.r, 0, 2 * Math.PI)
-      ctx.fillStyle = d.selected
+    // Pass 2: trails, halos and dots, batched into one path per style —
+    // with hundreds of satellites up, a fill per dot dominated the frame.
+    const shown = drawn.filter((d, k) => !d.trainOnly || inTrain.has(k))
+    const fillOf = (d: SatDrawable) =>
+      d.selected
         ? f.palette.selected
         : d.station
           ? f.palette.station
@@ -610,13 +669,64 @@ export class SkyRenderer {
             : d.sunlit >= 0.5
               ? f.palette.sunlitFaint
               : f.palette.eclipsed
+    // Trails, grouped by colour and (rounded) width.
+    const trails = new Map<string, SatDrawable[]>()
+    for (const d of shown) {
+      if (!d.trail) continue
+      const colour = d.visible || d.station ? f.palette.sunlit : f.palette.sunlitFaint
+      const key = `${colour}|${Math.round(Math.max(1.2, d.r * 0.9) * 2) / 2}`
+      let g = trails.get(key)
+      if (!g) trails.set(key, (g = []))
+      g.push(d)
+    }
+    ctx.globalAlpha = 0.55
+    ctx.lineCap = 'butt'
+    for (const [key, group] of trails) {
+      const [colour, width] = key.split('|')
+      ctx.beginPath()
+      for (const d of group) {
+        ctx.moveTo(d.x, d.y)
+        ctx.lineTo(d.trail!.x, d.trail!.y)
+      }
+      ctx.strokeStyle = colour!
+      ctx.lineWidth = Number(width)
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
+    // A dark halo separates each dot from stars and constellation lines.
+    ctx.beginPath()
+    for (const d of shown) {
+      ctx.moveTo(d.x + d.r + 1.6, d.y)
+      ctx.arc(d.x, d.y, d.r + 1.6, 0, 2 * Math.PI)
+    }
+    ctx.fillStyle = f.palette.labelHalo
+    ctx.fill()
+    // Dots, faint styles first so stations and the selection end on top.
+    const order = [f.palette.eclipsed, f.palette.sunlitFaint, f.palette.sunlit, f.palette.station, f.palette.selected]
+    for (const colour of order) {
+      ctx.beginPath()
+      let any = false
+      for (const d of shown) {
+        if (fillOf(d) !== colour) continue
+        ctx.moveTo(d.x + d.r, d.y)
+        ctx.arc(d.x, d.y, d.r, 0, 2 * Math.PI)
+        any = true
+      }
+      if (!any) continue
+      ctx.fillStyle = colour
       ctx.fill()
+    }
+
+    // Hits and labels.
+    let selectedDrawn: SatDrawable | null = null
+    for (const d of shown) {
+      const sat = sats[d.index]!
       this.stats.drawn++
       const brightness = Number.isNaN(d.mag) ? 0 : 10 - d.mag
       this.hits.push({ kind: 'sat', id: sat.norad, x: d.x, y: d.y, r: d.r, priority: (d.visible ? 20 : 0) + brightness + (d.station ? 30 : 0) })
       if (d.selected) selectedDrawn = d
       // Train members are covered by their train's label, unless selected.
-      if (labelsOn && (d.station || d.visible || many || d.selected) && (!inTrain.has(k) || d.selected)) {
+      if (labelsOn && (d.station || d.visible || many || d.selected) && (!inTrainIndex.has(d.index) || d.selected)) {
         labels.push({
           text: displayName(sat),
           x: d.x,
@@ -626,7 +736,7 @@ export class SkyRenderer {
           colour: d.selected ? f.palette.selected : d.station ? f.palette.station : f.palette.label,
         })
       }
-    })
+    }
     if (selectedDrawn) {
       const d: SatDrawable = selectedDrawn
       ctx.beginPath()
