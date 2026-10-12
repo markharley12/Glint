@@ -13,7 +13,7 @@ import type { Vec3 } from '../core/vec.ts'
 import type { DataIndex } from '../data/pack.ts'
 
 export type Request =
-  | { type: 'load'; id: number; baseUrl: string; packs: string[] }
+  | { type: 'load'; id: number; baseUrl: string; packs: string[] | null }
   | { type: 'observer'; id: number; observer: Observer }
   | { type: 'tick'; id: number; ms: number }
   | { type: 'look'; id: number; norad: number; ms: number }

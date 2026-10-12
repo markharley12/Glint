@@ -141,10 +141,12 @@ export const quat = {
     const wb = Math.sin(t * th) / s
     return [wa * a[0] + wb * bb[0], wa * a[1] + wb * bb[1], wa * a[2] + wb * bb[2], wa * a[3] + wb * bb[3]]
   },
-  /** Rotation angle between two orientations, in [0, π]. */
+  /** Rotation angle between two orientations, in [0, π]. From the
+   *  relative rotation's vector and scalar parts via atan2, which stays
+   *  exact for tiny angles where acos(w) loses half its digits. */
   angleBetween(a: Quat, b: Quat): number {
-    const d = Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3])
-    return 2 * Math.acos(Math.min(1, d))
+    const d = quat.mul(quat.conj(a), b)
+    return 2 * Math.atan2(Math.hypot(d[1], d[2], d[3]), Math.abs(d[0]))
   },
 }
 

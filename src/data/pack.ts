@@ -63,6 +63,8 @@ export interface PackSummary {
   /** File name relative to the index. */
   file: string
   bytes: number
+  /** Size gzipped, as the browser will download it from most hosts. */
+  gzipBytes?: number
 }
 
 export interface DataIndex {

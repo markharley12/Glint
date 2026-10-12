@@ -16,11 +16,12 @@ function reply(msg: Response, transfer: Transferable[] = []): void {
   self.postMessage(msg, { transfer })
 }
 
-async function load(baseUrl: string, packIds: string[]): Promise<LoadResult> {
+/** `packIds` null means the packs the index marks as defaults. */
+async function load(baseUrl: string, packIds: string[] | null): Promise<LoadResult> {
   const index = await fetchIndex(baseUrl)
   const rows = new Map<number, DecodedRow>()
   const missing: LoadResult['missing'] = []
-  const wanted = index.packs.filter((p) => packIds.includes(p.id))
+  const wanted = index.packs.filter((p) => (packIds ? packIds.includes(p.id) : p.default))
   // In parallel: the browser's per-host limit keeps this polite, and the
   // big Starlink pack shouldn't hold up the small ones.
   const results = await Promise.allSettled(wanted.map((p) => fetchPack(baseUrl, p.file)))

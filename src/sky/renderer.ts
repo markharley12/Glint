@@ -1,0 +1,624 @@
+/**
+ * Draws the sky — background, horizon, grid, constellations, stars, Sun,
+ * Moon, planets and satellites — through any Projector onto a 2D canvas,
+ * and records what it drew where so taps can be resolved.
+ *
+ * Everything is drawn at its *apparent* elevation (geometric plus
+ * refraction), the way it looks, which matters within a few degrees of the
+ * horizon where refraction lifts things by up to half a degree.
+ */
+import { horizontalToEnu, refraction } from '../core/frames.ts'
+import { displayName, isStation } from '../core/names.ts'
+import type { SatelliteInfo } from '../core/satellite.ts'
+import { getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
+import { DEG, RAD, type Mat3, type Vec3 } from '../core/vec.ts'
+import type { Settings, ViewMode } from '../state/settings.ts'
+import { Slot, STRIDE } from '../worker/engine.ts'
+import type { TickData, TrackPoint } from '../worker/protocol.ts'
+import { placeLabels, type LabelRequest } from './labels.ts'
+import { skyColour, starColour, type Palette } from './palette.ts'
+import { PerspectiveProjector, PolarProjector, type Point, type Projector } from './projection.ts'
+import { appearance, satRadius, starRadius } from './visibility.ts'
+
+export interface SkyFrame {
+  ms: number
+  projector: Projector
+  mode: ViewMode
+  palette: Palette
+  settings: Settings
+  /** J2000 → ENU rotation for this instant. */
+  eqjToEnu: Mat3
+  bodies: BodyPosition[]
+  sunEl: number
+  tick: TickData | null
+  sats: SatelliteInfo[]
+  selected: number | null
+  track: TrackPoint[] | null
+  /** Ring this object's predicted position (calibration). */
+  highlight?: string | null
+}
+
+export type HitKind = 'sat' | 'body' | 'star'
+
+export interface HitTarget {
+  kind: HitKind
+  /** NORAD number for satellites, name for bodies and stars. */
+  id: number | string
+  x: number
+  y: number
+  /** Drawn radius, px. */
+  r: number
+  /** Higher wins ties: bright and visible satellites over faint ones. */
+  priority: number
+}
+
+export interface RenderStats {
+  /** Satellites above the horizon that pass the show filter, whole sky. */
+  up: number
+  /** Naked-eye visible satellites, whole sky. */
+  visible: number
+  /** Satellites drawn on screen this frame. */
+  drawn: number
+  /** Where the selected satellite is, if it is up: on screen or not. */
+  selectedOnScreen: boolean | null
+}
+
+/** Geometric ENU direction → apparent (refracted) unit vector. */
+function apparent(v: Vec3): Vec3 {
+  const h = Math.hypot(v[0], v[1])
+  const r = Math.hypot(h, v[2])
+  const el = Math.asin(v[2] / r) * RAD
+  const elA = (el + refraction(el)) * DEG
+  if (h === 0) return [0, 0, 1]
+  const c = Math.cos(elA)
+  return [(v[0] / h) * c, (v[1] / h) * c, Math.sin(elA)]
+}
+
+/** Trail length behind each satellite: this many seconds of motion, but
+ *  no longer than TRAIL_MAX_PX on screen. */
+const TRAIL_S = 15
+const TRAIL_MAX_PX = 34
+
+const mul = (m: Mat3, v: Vec3): Vec3 => [
+  m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+  m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+  m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
+]
+
+export class SkyRenderer {
+  private ctx: CanvasRenderingContext2D
+  hits: HitTarget[] = []
+  stats: RenderStats = { up: 0, visible: 0, drawn: 0, selectedOnScreen: null }
+  private p: Point = { x: 0, y: 0 }
+  private q: Point = { x: 0, y: 0 }
+
+  constructor(ctx: CanvasRenderingContext2D) {
+    this.ctx = ctx
+  }
+
+  render(f: SkyFrame): void {
+    const { ctx } = this
+    const { projector: pr } = f
+    this.hits = []
+    this.stats = { up: 0, visible: 0, drawn: 0, selectedOnScreen: null }
+    ctx.clearRect(0, 0, pr.width, pr.height)
+
+    this.drawBackground(f)
+    ctx.save()
+    if (pr instanceof PolarProjector) {
+      ctx.beginPath()
+      ctx.arc(pr.cx, pr.cy, pr.radius, 0, 2 * Math.PI)
+      ctx.clip()
+    }
+    if (f.settings.grid) this.drawGrid(f)
+    if (f.settings.constellations && f.mode !== 'ar') this.drawConstellations(f)
+    this.drawStars(f)
+    const labels: LabelRequest[] = []
+    this.drawBodies(f, labels)
+    if (f.track) this.drawTrack(f)
+    this.drawSatellites(f, labels)
+    if (f.highlight) this.drawHighlight(f, f.highlight)
+    if (pr instanceof PerspectiveProjector) this.drawGround(f, pr)
+    ctx.restore()
+
+    if (pr instanceof PolarProjector) this.drawPolarRim(f, pr)
+    else this.drawCardinals(f)
+    this.drawLabels(f, labels)
+    if (pr instanceof PerspectiveProjector && f.selected !== null && this.stats.selectedOnScreen === false) {
+      this.drawOffscreenArrow(f, pr)
+    }
+  }
+
+  // --- background, ground and grid -----------------------------------------
+
+  private drawBackground(f: SkyFrame): void {
+    const { ctx } = this
+    const pr = f.projector
+    if (f.mode === 'ar') return // the camera feed is the background
+    const sky = skyColour(f.palette, f.sunEl)
+    if (pr instanceof PolarProjector) {
+      ctx.fillStyle = f.palette.page
+      ctx.fillRect(0, 0, pr.width, pr.height)
+      ctx.beginPath()
+      ctx.arc(pr.cx, pr.cy, pr.radius, 0, 2 * Math.PI)
+      ctx.fillStyle = sky
+      ctx.fill()
+    } else {
+      ctx.fillStyle = sky
+      ctx.fillRect(0, 0, pr.width, pr.height)
+    }
+  }
+
+  /** Below-horizon fill for the perspective views: the screen rectangle
+   *  clipped to the ground side of the horizon line. Drawn over the sky
+   *  objects so that anything below the horizon is hidden by the ground. */
+  private drawGround(f: SkyFrame, pr: PerspectiveProjector): void {
+    const { a, b, c } = pr.horizonLine()
+    const g = (x: number, y: number) => a * x + b * y + c
+    const corners: [number, number][] = [
+      [0, 0],
+      [pr.width, 0],
+      [pr.width, pr.height],
+      [0, pr.height],
+    ]
+    // Sutherland–Hodgman against the one half-plane g < 0.
+    const poly: [number, number][] = []
+    for (let i = 0; i < 4; i++) {
+      const [x0, y0] = corners[i]!
+      const [x1, y1] = corners[(i + 1) % 4]!
+      const g0 = g(x0, y0)
+      const g1 = g(x1, y1)
+      if (g0 < 0) poly.push([x0, y0])
+      if (g0 < 0 !== g1 < 0) {
+        const t = g0 / (g0 - g1)
+        poly.push([x0 + t * (x1 - x0), y0 + t * (y1 - y0)])
+      }
+    }
+    if (poly.length < 3) return
+    const { ctx } = this
+    ctx.beginPath()
+    ctx.moveTo(poly[0]![0], poly[0]![1])
+    for (const [x, y] of poly.slice(1)) ctx.lineTo(x, y)
+    ctx.closePath()
+    ctx.fillStyle = f.mode === 'ar' ? f.palette.groundAr : f.palette.ground
+    ctx.fill()
+    // The horizon itself: the edge of that polygon that lies on g = 0.
+    ctx.beginPath()
+    let started = false
+    for (const [x, y] of poly) {
+      if (Math.abs(g(x, y)) < 1e-6) {
+        if (!started) ctx.moveTo(x, y)
+        else ctx.lineTo(x, y)
+        started = true
+      }
+    }
+    ctx.strokeStyle = f.palette.horizon
+    ctx.lineWidth = 1.2
+    ctx.stroke()
+  }
+
+  /** Stroke a path through sky directions, breaking it wherever a point
+   *  can't be projected or consecutive points jump implausibly far. */
+  private strokeSkyPath(pr: Projector, pts: Vec3[], close = false): void {
+    const { ctx, p } = this
+    const maxJump = Math.max(pr.width, pr.height) * 0.5
+    let prevOk = false
+    let px = 0
+    let py = 0
+    ctx.beginPath()
+    const n = close ? pts.length + 1 : pts.length
+    for (let i = 0; i < n; i++) {
+      const ok = pr.project(pts[i % pts.length]!, p)
+      if (ok && prevOk && Math.hypot(p.x - px, p.y - py) < maxJump) ctx.lineTo(p.x, p.y)
+      else if (ok) ctx.moveTo(p.x, p.y)
+      prevOk = ok
+      px = p.x
+      py = p.y
+    }
+    ctx.stroke()
+  }
+
+  private drawGrid(f: SkyFrame): void {
+    const { ctx } = this
+    const pr = f.projector
+    ctx.strokeStyle = f.palette.grid
+    ctx.lineWidth = 1
+    // Altitude circles every 30° (every 15° when zoomed in).
+    const altStep = pr.pxPerDeg > 12 ? 15 : 30
+    for (let el = altStep; el < 90; el += altStep) {
+      const pts: Vec3[] = []
+      for (let az = 0; az < 360; az += 2) pts.push(horizontalToEnu(az, el))
+      this.strokeSkyPath(pr, pts, true)
+    }
+    // Azimuth lines every 30°, horizon to near the zenith.
+    for (let az = 0; az < 360; az += 30) {
+      const pts: Vec3[] = []
+      for (let el = 0; el <= 88; el += 2) pts.push(horizontalToEnu(az, el))
+      this.strokeSkyPath(pr, pts)
+    }
+    // The horizon itself in the polar map is the rim; in perspective views
+    // drawGround draws it.
+  }
+
+  private drawPolarRim(f: SkyFrame, pr: PolarProjector): void {
+    const { ctx } = this
+    ctx.beginPath()
+    ctx.arc(pr.cx, pr.cy, pr.radius, 0, 2 * Math.PI)
+    ctx.strokeStyle = f.palette.horizon
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+    ctx.font = '600 13px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = f.palette.cardinal
+    for (const [label, az] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]] as const) {
+      const v = horizontalToEnu(az, 0)
+      pr.project(v, this.p)
+      // Push the letter just outside the rim.
+      const dx = this.p.x - pr.cx
+      const dy = this.p.y - pr.cy
+      const k = (pr.radius + 14) / pr.radius
+      ctx.fillText(label, pr.cx + dx * k, pr.cy + dy * k)
+    }
+  }
+
+  private drawCardinals(f: SkyFrame): void {
+    const { ctx, p } = this
+    const pr = f.projector
+    ctx.font = '600 13px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    for (const [label, az] of [['N', 0], ['NE', 45], ['E', 90], ['SE', 135], ['S', 180], ['SW', 225], ['W', 270], ['NW', 315]] as const) {
+      if (!pr.project(horizontalToEnu(az, 0), p)) continue
+      if (p.x < 0 || p.x > pr.width || p.y < 0 || p.y > pr.height) continue
+      ctx.fillStyle = label.length === 1 ? f.palette.cardinal : f.palette.gridLabel
+      ctx.fillText(label, p.x, p.y - 10)
+    }
+  }
+
+  // --- the natural sky ---------------------------------------------------------
+
+  private drawConstellations(f: SkyFrame): void {
+    const { ctx, p } = this
+    const pr = f.projector
+    ctx.strokeStyle = f.palette.constellation
+    ctx.lineWidth = 1
+    for (const c of getConstellations()) {
+      for (const line of c.lines) this.strokeSkyPath(pr, line.map((v) => apparent(mul(f.eqjToEnu, v))))
+    }
+    // Names only when zoomed in enough not to clutter the view.
+    if (pr.pxPerDeg < 6) return
+    ctx.font = '11px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = f.palette.constellationLabel
+    for (const c of getConstellations()) {
+      const v = mul(f.eqjToEnu, c.label)
+      if (v[2] < 0) continue
+      if (pr.project(apparent(v), p)) ctx.fillText(c.name.toUpperCase(), p.x, p.y)
+    }
+  }
+
+  private drawStars(f: SkyFrame): void {
+    const { ctx, p } = this
+    const pr = f.projector
+    const limit = f.mode === 'ar' ? Math.min(f.settings.starMag, 3.5) : f.settings.starMag
+    // Brighter skies drown faint stars: hide them as the Sun comes up.
+    const skyLimit = f.sunEl > -6 ? Math.min(limit, 1 + (-f.sunEl / 6) * 2) : f.sunEl > -12 ? Math.min(limit, 3 + ((-f.sunEl - 6) / 6) * 2) : limit
+    // Stars grow a little when zoomed in, as in a real eyepiece.
+    const scale = Math.min(1.6, Math.max(0.8, Math.sqrt(pr.pxPerDeg / 8)))
+    for (const s of getStars()) {
+      if (s.mag > skyLimit) break // sorted brightest first
+      const v = mul(f.eqjToEnu, s.v)
+      if (v[2] < -0.01) continue
+      if (!pr.project(apparent(v), p)) continue
+      if (p.x < -4 || p.y < -4 || p.x > pr.width + 4 || p.y > pr.height + 4) continue
+      const r = starRadius(s.mag, scale)
+      ctx.fillStyle = f.palette.starTint ? starColour(s.bv) : f.palette.sunlitFaint
+      ctx.globalAlpha = s.mag > 4 ? 0.6 : 1
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, r, 0, 2 * Math.PI)
+      ctx.fill()
+      if (s.name) this.hits.push({ kind: 'star', id: s.name, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
+    }
+    ctx.globalAlpha = 1
+  }
+
+  private drawBodies(f: SkyFrame, labels: LabelRequest[]): void {
+    const { ctx, p, q } = this
+    const pr = f.projector
+    const sun = f.bodies.find((b) => b.name === 'Sun')
+    for (const b of f.bodies) {
+      if (b.v[2] < -0.02) continue
+      if (!pr.project(apparent(b.v), p)) continue
+      const r = Math.max(b.name === 'Sun' || b.name === 'Moon' ? 6 : 2.4, b.radius * pr.pxPerDeg)
+      if (b.name === 'Moon' && sun) {
+        // Bright limb toward the Sun: find the on-screen direction by
+        // projecting a point a little way from the Moon toward the Sun.
+        const step = 0.02
+        const towardSun = apparent([b.v[0] + sun.v[0] * step, b.v[1] + sun.v[1] * step, b.v[2] + sun.v[2] * step])
+        const angle = pr.project(towardSun, q) ? Math.atan2(q.y - p.y, q.x - p.x) : 0
+        this.drawMoon(f, p.x, p.y, r, b.phase, angle)
+      } else {
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, r, 0, 2 * Math.PI)
+        ctx.fillStyle = b.name === 'Sun' ? f.palette.sun : f.palette.planet
+        ctx.fill()
+      }
+      this.hits.push({ kind: 'body', id: b.name, x: p.x, y: p.y, r, priority: 5 })
+      labels.push({ text: b.name, x: p.x, y: p.y, gap: r + 2, priority: 50, colour: f.palette.planet })
+    }
+  }
+
+  private drawMoon(f: SkyFrame, x: number, y: number, r: number, phase: number, angle: number): void {
+    const { ctx } = this
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(angle)
+    ctx.beginPath()
+    ctx.arc(0, 0, r, 0, 2 * Math.PI)
+    ctx.fillStyle = f.palette.moonDark
+    ctx.fill()
+    // Lit half toward +x (the Sun), closed by the terminator: an ellipse
+    // whose half-width is |2k − 1|·r, bulging toward the dark side when
+    // gibbous and toward the lit side when crescent.
+    ctx.beginPath()
+    ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, false)
+    ctx.ellipse(0, 0, Math.abs(2 * phase - 1) * r, r, 0, Math.PI / 2, -Math.PI / 2, phase < 0.5)
+    ctx.closePath()
+    ctx.fillStyle = f.palette.moonLit
+    ctx.fill()
+    ctx.restore()
+  }
+
+  /** A dashed ring where a named body or star should be. */
+  private drawHighlight(f: SkyFrame, name: string): void {
+    const body = f.bodies.find((b) => b.name === name)
+    const star = body ? undefined : getStars().find((s) => s.name === name)
+    const v = body ? body.v : star ? mul(f.eqjToEnu, star.v) : null
+    if (!v || !f.projector.project(apparent(v), this.p)) return
+    const { ctx, p } = this
+    ctx.save()
+    ctx.setLineDash([5, 4])
+    ctx.lineWidth = 2
+    ctx.strokeStyle = f.palette.selected
+    ctx.beginPath()
+    ctx.arc(p.x, p.y, 20, 0, 2 * Math.PI)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // --- satellites --------------------------------------------------------------
+
+  private drawTrack(f: SkyFrame): void {
+    const { ctx, p } = this
+    const pr = f.projector
+    const track = f.track!
+    ctx.lineWidth = 1.5
+    ctx.strokeStyle = f.palette.track
+    // Segments are solid where the satellite is sunlit, dashed in shadow.
+    let i = 0
+    while (i < track.length - 1) {
+      const lit = track[i]!.sunlit >= 0.5
+      const seg: Vec3[] = []
+      let j = i
+      while (j < track.length && track[j]!.sunlit >= 0.5 === lit) {
+        const t = track[j]!
+        if (t.el > -1) seg.push(apparent(horizontalToEnu(t.az, t.el)))
+        j++
+      }
+      // Overlap by one point so segments join.
+      if (j < track.length) {
+        const t = track[j]!
+        if (t.el > -1) seg.push(apparent(horizontalToEnu(t.az, t.el)))
+      }
+      ctx.setLineDash(lit ? [] : [4, 4])
+      if (seg.length > 1) this.strokeSkyPath(pr, seg)
+      i = j
+    }
+    ctx.setLineDash([])
+    // Minute ticks along the track, so the speed reads at a glance.
+    ctx.fillStyle = f.palette.track
+    for (const t of track) {
+      if (t.el < 0 || Math.round(t.ms / 1000) % 60 !== 0) continue
+      if (pr.project(apparent(horizontalToEnu(t.az, t.el)), p)) {
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, 1.8, 0, 2 * Math.PI)
+        ctx.fill()
+      }
+    }
+  }
+
+  private drawSatellites(f: SkyFrame, labels: LabelRequest[]): void {
+    const { tick, sats, settings } = f
+    if (!tick) return
+    const { ctx, p } = this
+    const pr = f.projector
+    const buf = tick.buffer
+    const dt = (f.ms - tick.ms) / 1000
+    const many = settings.labels === 'many'
+    const labelsOn = settings.labels !== 'none'
+    const n = Math.min(sats.length, buf.length / STRIDE)
+    let selectedDrawn: Point | null = null
+    for (let i = 0; i < n; i++) {
+      const o = i * STRIDE
+      const x0 = buf[o]!
+      if (Number.isNaN(x0)) continue
+      const e = x0 + buf[o + Slot.VE]! * dt
+      const nn = buf[o + Slot.N]! + buf[o + Slot.VN]! * dt
+      const u = buf[o + Slot.U]! + buf[o + Slot.VU]! * dt
+      const range = Math.hypot(e, nn, u)
+      // Cheap reject well below the horizon before any trig.
+      if (u / range < -0.015) continue
+      const v = apparent([e, nn, u])
+      if (v[2] < 0) continue
+      const sat = sats[i]!
+      const isSelected = sat.norad === f.selected
+      const sunlit = buf[o + Slot.SUNLIT]!
+      const mag = buf[o + Slot.MAG]!
+      const look = appearance(settings.show, sunlit, mag, f.sunEl, settings.limitingMag)
+      if (look.shown) this.stats.up++
+      if (look.visible) this.stats.visible++
+      if (!look.shown && !isSelected) continue
+      if (!pr.project(v, p)) {
+        if (isSelected) this.stats.selectedOnScreen = false
+        continue
+      }
+      const onScreen = p.x >= -10 && p.y >= -10 && p.x <= pr.width + 10 && p.y <= pr.height + 10
+      if (isSelected) this.stats.selectedOnScreen = onScreen
+      if (!onScreen) continue
+
+      const station = isStation(sat)
+      const r = satRadius(mag) + (station ? 0.6 : 0)
+      // A short trail behind each satellite: shows which way it is going and
+      // tells satellites apart from stars at a glance.
+      const back = apparent([e - buf[o + Slot.VE]! * TRAIL_S, nn - buf[o + Slot.VN]! * TRAIL_S, u - buf[o + Slot.VU]! * TRAIL_S])
+      if (pr.project(back, this.q)) {
+        let tx = this.q.x - p.x
+        let ty = this.q.y - p.y
+        const len = Math.hypot(tx, ty)
+        if (len > 2) {
+          const k = Math.min(1, TRAIL_MAX_PX / len)
+          tx *= k
+          ty *= k
+          ctx.beginPath()
+          ctx.moveTo(p.x, p.y)
+          ctx.lineTo(p.x + tx, p.y + ty)
+          ctx.strokeStyle = look.visible || station ? f.palette.sunlit : f.palette.sunlitFaint
+          ctx.globalAlpha = 0.55
+          ctx.lineWidth = Math.max(1.2, r * 0.9)
+          ctx.stroke()
+          ctx.globalAlpha = 1
+        }
+      }
+      // A dark halo separates the dot from stars and constellation lines.
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, r + 1.6, 0, 2 * Math.PI)
+      ctx.fillStyle = f.palette.labelHalo
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, r, 0, 2 * Math.PI)
+      ctx.fillStyle = isSelected
+        ? f.palette.selected
+        : station
+          ? f.palette.station
+          : look.visible
+            ? f.palette.sunlit
+            : sunlit >= 0.5
+              ? f.palette.sunlitFaint
+              : f.palette.eclipsed
+      ctx.fill()
+      this.stats.drawn++
+      const brightness = Number.isNaN(mag) ? 0 : 10 - mag
+      this.hits.push({ kind: 'sat', id: sat.norad, x: p.x, y: p.y, r, priority: (look.visible ? 20 : 0) + brightness + (station ? 30 : 0) })
+      if (isSelected) selectedDrawn = { x: p.x, y: p.y }
+      if (labelsOn && (station || look.visible || many || isSelected)) {
+        labels.push({
+          text: displayName(sat),
+          x: p.x,
+          y: p.y,
+          gap: r + 1,
+          priority: (isSelected ? 1000 : 0) + (station ? 100 : 0) + brightness,
+          colour: isSelected ? f.palette.selected : station ? f.palette.station : f.palette.label,
+        })
+      }
+    }
+    if (selectedDrawn) {
+      ctx.beginPath()
+      ctx.arc(selectedDrawn.x, selectedDrawn.y, 9, 0, 2 * Math.PI)
+      ctx.strokeStyle = f.palette.selected
+      ctx.lineWidth = 2
+      ctx.stroke()
+    }
+  }
+
+  private drawLabels(f: SkyFrame, requests: LabelRequest[]): void {
+    const { ctx } = this
+    const pr = f.projector
+    ctx.font = '12px system-ui, sans-serif'
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'middle'
+    const max = f.settings.labels === 'many' ? 60 : f.settings.labels === 'few' ? 14 : 1
+    const placed = placeLabels(requests, (t) => ctx.measureText(t).width, pr, 13, max)
+    ctx.lineWidth = 3
+    ctx.strokeStyle = f.palette.labelHalo
+    ctx.lineJoin = 'round'
+    for (const l of placed) {
+      ctx.strokeText(l.text, l.x, l.y)
+      ctx.fillStyle = l.colour
+      ctx.fillText(l.text, l.x, l.y)
+    }
+  }
+
+  /** An arrow at the screen edge pointing the way to turn to find the
+   *  selected satellite. */
+  private drawOffscreenArrow(f: SkyFrame, pr: PerspectiveProjector): void {
+    const tick = f.tick
+    if (!tick) return
+    const i = f.sats.findIndex((s) => s.norad === f.selected)
+    if (i < 0) return
+    const o = i * STRIDE
+    if (Number.isNaN(tick.buffer[o]!)) return
+    const dt = (f.ms - tick.ms) / 1000
+    const v: Vec3 = [
+      tick.buffer[o]! + tick.buffer[o + Slot.VE]! * dt,
+      tick.buffer[o + Slot.N]! + tick.buffer[o + Slot.VN]! * dt,
+      tick.buffer[o + Slot.U]! + tick.buffer[o + Slot.VU]! * dt,
+    ]
+    const c = pr.toCamera(v)
+    // Direction on screen (y down); behind the camera the x/y components
+    // still say which way to turn.
+    let dx = c[0]
+    let dy = -c[1]
+    const len = Math.hypot(dx, dy) || 1
+    dx /= len
+    dy /= len
+    const margin = 34
+    const hw = pr.width / 2 - margin
+    const hh = pr.height / 2 - margin
+    const t = Math.min(Math.abs(dx) > 1e-9 ? hw / Math.abs(dx) : Infinity, Math.abs(dy) > 1e-9 ? hh / Math.abs(dy) : Infinity)
+    const x = pr.cx + dx * t
+    const y = pr.cy + dy * t
+    const { ctx } = this
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.rotate(Math.atan2(dy, dx))
+    ctx.beginPath()
+    ctx.moveTo(16, 0)
+    ctx.lineTo(-8, -11)
+    ctx.lineTo(-3, 0)
+    ctx.lineTo(-8, 11)
+    ctx.closePath()
+    ctx.fillStyle = f.palette.arrow
+    ctx.fill()
+    ctx.restore()
+    const name = displayName(f.sats[i]!)
+    ctx.font = '600 12px system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.lineWidth = 3
+    ctx.strokeStyle = f.palette.labelHalo
+    const ty = y + (dy > 0 ? -22 : 22)
+    ctx.strokeText(name, x, ty)
+    ctx.fillStyle = f.palette.arrow
+    ctx.fillText(name, x, ty)
+  }
+
+  /** The best target within `tolerance` px of a tap, satellites first. */
+  hitTest(x: number, y: number, tolerance: number): HitTarget | null {
+    let best: HitTarget | null = null
+    let bestScore = Infinity
+    for (const h of this.hits) {
+      const d = Math.hypot(h.x - x, h.y - y) - h.r
+      if (d > tolerance) continue
+      // Distance matters most; priority breaks near-ties. Satellites get a
+      // head start because they are what people tap for.
+      const score = d - h.priority * 0.3 - (h.kind === 'sat' ? 6 : 0)
+      if (score < bestScore) {
+        bestScore = score
+        best = h
+      }
+    }
+    return best
+  }
+}

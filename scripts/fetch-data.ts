@@ -20,6 +20,7 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 import { unzipSync, strFromU8 } from 'fflate'
 import { PACK_FORMAT, type DataIndex } from '../src/data/pack.ts'
 import { buildPacks, type CelestrakOmm, type PackDefinition } from './lib/build.ts'
@@ -210,6 +211,7 @@ async function main() {
       count: file.rows.length,
       file: name,
       bytes: Buffer.byteLength(json),
+      gzipBytes: gzipSync(json, { level: 9 }).length,
     })
   }
   await writeFile(join(OUT, 'index.json'), JSON.stringify(index, null, 1))
@@ -218,7 +220,9 @@ async function main() {
   console.log(`\nMagnitude from RCS: ${m.a.toFixed(2)} ${m.b.toFixed(2)}·log10(RCS), rms ${m.rms.toFixed(2)} over ${m.n}`)
   console.log(`Magnitude sources: ${JSON.stringify(result.magnitudeSources)}`)
   console.log(`Rejected: ${JSON.stringify(result.rejected)}`)
-  for (const p of index.packs) console.log(`  ${p.id.padEnd(15)} ${String(p.count).padStart(6)} sats ${(p.bytes / 1024).toFixed(0).padStart(6)} KB`)
+  for (const p of index.packs) {
+    console.log(`  ${p.id.padEnd(15)} ${String(p.count).padStart(6)} sats ${(p.bytes / 1024).toFixed(0).padStart(6)} KB (${((p.gzipBytes ?? 0) / 1024).toFixed(0)} KB gzipped)`)
+  }
   if (result.skipped.length) console.warn(`Skipped packs (no data): ${result.skipped.join(', ')}`)
   if (failures.length) console.warn(`Failed groups: ${failures.join(', ')}`)
 }
