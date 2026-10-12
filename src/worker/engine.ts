@@ -19,15 +19,9 @@ import { look, type Look } from '../core/look.ts'
 import { jdFromMs, propagateJd, type Satellite } from '../core/satellite.ts'
 import { sunEnu, sunlitFraction, sunTemeAu } from '../core/sun.ts'
 import type { Vec3 } from '../core/vec.ts'
+import { Slot, STRIDE } from './layout.ts'
 
-/** Floats per satellite in a tick buffer. */
-export const STRIDE = 8
-/** Offsets within a satellite's slot. Position is ENU km relative to the
- *  observer, velocity ENU km/s; position x is NaN when the satellite is
- *  below the horizon (skipped) or the model failed. SUNLIT is the fraction
- *  of the Sun's disc in view (0–1); MAG the apparent magnitude, NaN if
- *  unknown or in shadow. */
-export const Slot = { E: 0, N: 1, U: 2, VE: 3, VN: 4, VU: 5, SUNLIT: 6, MAG: 7 } as const
+export { Slot, STRIDE } from './layout.ts'
 
 /** A tick further than this from the previous one rebuilds all bounds. */
 const MAX_FORWARD_JUMP_MS = 10 * 60_000

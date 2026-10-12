@@ -3,8 +3,8 @@
 import type { OMMJsonObject } from 'satellite.js'
 import { makeSatellite, type Satellite } from '../satellite.ts'
 import type { Observer } from '../frames.ts'
-import elementsFile from './elements.json'
-import skyfield from './skyfield.json'
+import elementsFile from './elements.json' with { type: 'json' }
+import skyfield from './skyfield.json' with { type: 'json' }
 
 export const elements = elementsFile.elements as unknown as OMMJsonObject[]
 

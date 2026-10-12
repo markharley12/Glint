@@ -17,7 +17,8 @@
  * Pages workflow runs this every few hours and deploys the result; browsers
  * never contact CelesTrak (it sends no CORS headers anyway).
  */
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
@@ -103,12 +104,35 @@ const cacheOnly = process.argv.includes('--cache-only')
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-async function fresh(path: string, maxAgeMs: number): Promise<boolean> {
-  try {
-    return Date.now() - (await stat(path)).mtimeMs < maxAgeMs
-  } catch {
-    return false
+/**
+ * When each cached file was downloaded, kept in a stamp file rather than
+ * read from file times: CI restores the cache from an archive, and restored
+ * files can carry the restore's time, which would make week-old data look
+ * fresh and stop it ever being refreshed.
+ */
+const STAMPS = join(CACHE, 'downloaded.json')
+let stamps: Record<string, number> | null = null
+
+async function loadStamps(): Promise<Record<string, number>> {
+  if (!stamps) {
+    try {
+      stamps = JSON.parse(await readFile(STAMPS, 'utf8')) as Record<string, number>
+    } catch {
+      stamps = {}
+    }
   }
+  return stamps
+}
+
+async function fresh(name: string, maxAgeMs: number): Promise<boolean> {
+  const at = (await loadStamps())[name]
+  return at !== undefined && Date.now() - at < maxAgeMs
+}
+
+async function stamp(name: string): Promise<void> {
+  const s = await loadStamps()
+  s[name] = Date.now()
+  await writeFile(STAMPS, JSON.stringify(s, null, 1))
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -129,7 +153,7 @@ let lastRequest = 0
  */
 async function download(url: string, cacheName: string, maxAgeMs: number): Promise<Uint8Array> {
   const path = join(CACHE, cacheName)
-  if (cacheOnly || (await fresh(path, maxAgeMs))) {
+  if (cacheOnly || (await fresh(cacheName, maxAgeMs))) {
     if (await exists(path)) return new Uint8Array(await readFile(path))
     throw new Error(`${cacheName} is not cached`)
   }
@@ -144,6 +168,7 @@ async function download(url: string, cacheName: string, maxAgeMs: number): Promi
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${strFromU8(body.slice(0, 200)).trim()}`)
       await mkdir(CACHE, { recursive: true })
       await writeFile(path, body)
+      await stamp(cacheName)
       return body
     } catch (e) {
       lastError = e
@@ -200,8 +225,10 @@ async function main() {
   await mkdir(OUT, { recursive: true })
   const index: DataIndex = { format: PACK_FORMAT, generated: new Date().toISOString(), sources: SOURCES, packs: [] }
   for (const { definition: d, file } of result.packs) {
-    const name = `${d.id}.json`
     const json = JSON.stringify(file)
+    // Content-addressed, so the service worker can cache packs forever and
+    // only the small index.json ever needs revalidating.
+    const name = `${d.id}-${createHash('sha256').update(json).digest('hex').slice(0, 10)}.json`
     await writeFile(join(OUT, name), json)
     index.packs.push({
       id: d.id,
@@ -215,6 +242,9 @@ async function main() {
     })
   }
   await writeFile(join(OUT, 'index.json'), JSON.stringify(index, null, 1))
+  // Remove packs from earlier runs.
+  const keep = new Set(['index.json', ...index.packs.map((p) => p.file)])
+  for (const f of await readdir(OUT)) if (!keep.has(f)) await rm(join(OUT, f))
 
   const m = result.model
   console.log(`\nMagnitude from RCS: ${m.a.toFixed(2)} ${m.b.toFixed(2)}·log10(RCS), rms ${m.rms.toFixed(2)} over ${m.n}`)

@@ -41,13 +41,4 @@ export function sunElevationDeg(sunEnuDir: Vec3): number {
   return Math.asin(Math.max(-1, Math.min(1, sunEnuDir[2]))) * RAD
 }
 
-export type Twilight = 'day' | 'civil' | 'nautical' | 'astronomical' | 'night'
-
-/** Twilight band for a (geometric) solar elevation. */
-export function twilight(sunElDeg: number): Twilight {
-  if (sunElDeg > -0.833) return 'day'
-  if (sunElDeg > -6) return 'civil'
-  if (sunElDeg > -12) return 'nautical'
-  if (sunElDeg > -18) return 'astronomical'
-  return 'night'
-}
+export { twilight, type Twilight } from './twilight.ts'

@@ -1,0 +1,36 @@
+# Lint, types, unit tests, build and end-to-end tests on every push and pull
+# request. Nothing here touches CelesTrak: unit tests use frozen fixtures and
+# the end-to-end tests serve e2e/fixtures/data in place of live data.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      # The lockfile is written by npm 11; Node 22's bundled npm 10 has
+      # rejected npm 11 lockfiles before (TaxoQuiz, Sep 2026).
+      - run: npm install -g npm@11
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      # Playwright drives the runner's preinstalled Google Chrome
+      # (channel: 'chrome' in playwright.config.ts), so no browser download.
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

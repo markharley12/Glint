@@ -1,0 +1,63 @@
+# Fetch fresh orbital data, build, and publish to GitHub Pages: on every push
+# to master, and every six hours so the data stays current (SGP4 positions
+# degrade as element sets age, quickly for low, manoeuvring Starlinks).
+#
+# CelesTrak updates about every two hours and asks clients not to download
+# a group more often than that; six-hourly is well inside the limit. The
+# previous run's downloads are restored first, so if CelesTrak is down the
+# build falls back to them (fetch-data.ts uses a stale copy with a warning)
+# rather than failing — and if even that is impossible, the deploy is
+# skipped and the site keeps its last good data.
+#
+# Pages has to be switched on once for the repository, with the source set
+# to GitHub Actions: `gh api -X POST repos/<owner>/<repo>/pages -f build_type=workflow`.
+name: Pages
+
+on:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
+
+# One deploy at a time, never cancelled mid-flight: a half-published site is
+# worse than one a run behind.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm install -g npm@11
+      - run: npm ci
+      - uses: actions/cache@v5
+        with:
+          path: .cache/data
+          key: celestrak-${{ github.run_id }}
+          restore-keys: celestrak-
+      - run: npm run data
+      - run: npm test
+      - run: npm run build
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

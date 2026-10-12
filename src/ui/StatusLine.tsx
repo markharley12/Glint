@@ -1,6 +1,6 @@
 /** One line under the top bar: where, how many satellites are up, and
  *  any problem worth knowing about (stale data, daylight, errors). */
-import { twilight } from '../core/sun.ts'
+import { twilight } from '../core/twilight.ts'
 import { DARK_ENOUGH_SUN_EL } from '../sky/visibility.ts'
 import { clock } from '../state/clock.ts'
 import { locationLabel, locationStatus, observer } from '../state/observer.ts'

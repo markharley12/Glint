@@ -1,0 +1,18 @@
+{
+ "format": 1,
+ "generated": "2026-10-12T00:00:00.000Z",
+ "sources": [
+  "Test fixture: frozen CelesTrak element sets from 2026-10-12."
+ ],
+ "packs": [
+  {
+   "id": "bright",
+   "title": "Bright & notable",
+   "description": "Fixture pack.",
+   "default": true,
+   "count": 8,
+   "file": "bright-fixture.json",
+   "bytes": 1852
+  }
+ ]
+}

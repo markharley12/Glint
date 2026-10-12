@@ -13,7 +13,7 @@
 import { Body, Equator, Illumination, MakeTime, Observer as AeObserver, Rotation_EQJ_HOR, RotateVector, Vector } from 'astronomy-engine'
 import type { Observer } from './frames.ts'
 import { DEG, type Mat3, type Vec3 } from './vec.ts'
-import skyData from '../data/sky.json'
+import skyData from '../data/sky.json' with { type: 'json' }
 
 export interface Star {
   /** J2000 unit vector. */

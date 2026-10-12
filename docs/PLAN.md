@@ -92,25 +92,28 @@ Phone compasses are commonly 5–15° off — this is why most AR sky apps feel 
 
 ## Milestones
 
+Progress as of Oct 2026; see CLAUDE.md for what was decided along the way.
+
 ### v1 — Sky map (prove the maths)
-- [ ] Vite + TS scaffold, HTTPS dev server reachable from phone.
-- [ ] Load `stations` + `visual` groups (static JSON committed for now).
-- [ ] Geolocation (with manual lat/lon fallback).
-- [ ] Worker propagation + polar sky map, live updating; sunlit vs eclipsed colouring.
-- [ ] **Validation:** ISS az/el and next-pass times match Heavens-Above/N2YO within ~0.5° / ~10s.
+- [x] Vite + TS scaffold, HTTPS dev server reachable from phone (`tailscale serve` or `HTTPS=1`).
+- [x] Load `stations` + `visual` groups (built into packs by `scripts/fetch-data.ts`).
+- [x] Geolocation (with manual lat/lon fallback).
+- [x] Worker propagation + polar sky map, live updating; sunlit vs eclipsed colouring.
+- [x] **Validation:** checked against Skyfield instead of by hand against Heavens-Above:
+      9″ / 40 m in position, rise/set within 1 s for all 228 reference passes.
 
 ### v2 — AR view
-- [ ] Camera feed (`getUserMedia`, rear camera).
-- [ ] Orientation pipeline for Android + iOS, screen-orientation handling, smoothing.
-- [ ] Projection + labels + trails; on-screen arrow pointing to off-screen tracked sat.
-- [ ] Tap-to-identify + result card.
+- [x] Camera feed (`getUserMedia`, rear camera).
+- [x] Orientation pipeline for Android + iOS, screen-orientation handling, smoothing. **Needs real-device testing.**
+- [x] Projection + labels + trails; on-screen arrow pointing to off-screen tracked sat.
+- [x] Tap-to-identify + result card.
 
 ### v3 — Accuracy + usefulness
-- [ ] Calibration flow (Moon/planets/bright stars via astronomy-engine).
-- [ ] Pass predictions screen.
-- [ ] GitHub Action data pipeline + IndexedDB cache + data-age indicator.
-- [ ] PWA install + offline.
-- [ ] Filters, Starlink-train highlighting, rough brightness estimates.
+- [x] Calibration flow (Moon/planets/bright stars via astronomy-engine).
+- [x] Pass predictions screen (+ .ics export).
+- [x] GitHub Action data pipeline + offline cache (service worker, not IndexedDB) + data-age indicator.
+- [x] PWA install + offline.
+- [x] Filters, rough brightness estimates. Starlink-train highlighting still to do.
 
 ### Later ideas
 - Pass notifications (web push is limited on iOS — maybe calendar export instead).

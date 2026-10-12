@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="sky" cx="50%" cy="38%" r="75%">
+      <stop offset="0" stop-color="#14213d"/>
+      <stop offset="1" stop-color="#05070c"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#4fd8ff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#4fd8ff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sky)"/>
+  <!-- An orbit, and the glint of sunlight off a satellite on it. -->
+  <ellipse cx="256" cy="282" rx="190" ry="78" fill="none" stroke="#4fd8ff" stroke-opacity="0.35" stroke-width="10" transform="rotate(-18 256 282)"/>
+  <circle cx="256" cy="230" r="120" fill="url(#glow)"/>
+  <path d="M256 104 L280 206 L382 230 L280 254 L256 356 L232 254 L130 230 L232 206 Z" fill="#e9fbff"/>
+  <path d="M388 340 L396 366 L422 374 L396 382 L388 408 L380 382 L354 374 L380 366 Z" fill="#fff6dc"/>
+  <circle cx="132" cy="128" r="6" fill="#cad7ff"/>
+  <circle cx="408" cy="120" r="4" fill="#cad7ff"/>
+  <circle cx="98" cy="372" r="4" fill="#cad7ff"/>
+</svg>
