@@ -51,6 +51,14 @@ export function SearchPanel() {
         autoFocus
         aria-label="Search satellites"
       />
+      {!query && (
+        <p class="small">
+          Saw something earlier?{' '}
+          <button class="link" onClick={() => (panel.value = 'recall')}>
+            Work out what it was
+          </button>
+        </p>
+      )}
       {up.length > 0 && (
         <>
           <h3 class="results__head">Visible now</h3>

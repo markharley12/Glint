@@ -3,6 +3,7 @@ import type { OMMJsonObject } from 'satellite.js'
 import { elements, fixtureSatellites, reference } from '../core/fixtures/index.ts'
 import { horizontalToEnu, TopocentricFrame } from '../core/frames.ts'
 import { look } from '../core/look.ts'
+import { findVisiblePasses } from '../core/passes.ts'
 import { makeSatellite, revsPerDay, type Satellite } from '../core/satellite.ts'
 import { Engine, Slot, STRIDE } from './engine.ts'
 
@@ -155,5 +156,28 @@ describe('Engine.identify', () => {
     }
     expect(cases).toBeGreaterThan(50)
     expect(hits).toBe(cases)
+  })
+})
+
+describe('Engine.recall', () => {
+  it('finds the visible pass someone saw a few minutes ago', () => {
+    const sats = [...fixtureSatellites().values()]
+    const engine = new Engine()
+    engine.setSatellites(sats)
+    // Cape Town has a bright evening ISS pass in the fixture's week.
+    const capeTown = { latitude: -33.92, longitude: 18.42, height: 0 }
+    engine.setObserver(capeTown)
+    const iss = sats.find((s) => s.norad === 25544)!
+    const pass = findVisiblePasses(iss, capeTown, START - 86_400_000, START + 2 * 86_400_000)[0]!
+    const seen = pass.visible!
+    // Remembered as about four minutes after it vanished.
+    const passes = engine.recall(seen.end.ms + 4 * 60_000, 5 * 60_000)
+    const match = passes.find((p) => p.norad === 25544)
+    expect(match).toBeDefined()
+    // The same pass (recall's looser rules widen its visible stretch).
+    expect(Math.abs(match!.max.ms - pass.max.ms)).toBeLessThan(1000)
+    expect(match!.visible!.start.ms).toBeLessThanOrEqual(seen.start.ms)
+    // And nothing it shouldn't: every pass overlaps the window.
+    for (const p of passes) expect(p.visible!.end.ms).toBeGreaterThanOrEqual(seen.end.ms - 60_000)
   })
 })

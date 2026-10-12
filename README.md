@@ -12,6 +12,8 @@ loaded. (The name is provisional; the repository is `sat-ar`.)
   fix your compass.
 - **“What’s that?”** — saw something moving? Follow it with the phone for
   five seconds and Glint works out which satellite it was from its path.
+- **“What did I see?”** — for something you noticed a few minutes ago: say
+  roughly when, which way it went and how bright it was.
 - **Satellite trains** — the strings of new Starlinks (and other
   constellations’ launches) are drawn as one line with one label, and listed
   in Passes.

@@ -844,6 +844,17 @@ input[type='range'] {
   cursor: pointer;
 }
 
+.recall__field {
+  border: 0;
+  padding: 0;
+  margin: 10px 0;
+}
+
+.recall__field legend {
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
 .shortcuts {
   border-collapse: collapse;
   margin: 6px 0;

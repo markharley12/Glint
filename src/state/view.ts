@@ -25,7 +25,7 @@ export const renderStats = signal<RenderStats & { sunEl: number }>({ up: 0, visi
 export const tooltip = signal<{ text: string; x: number; y: number } | null>(null)
 
 /** Which side panel is open. */
-export type Panel = 'none' | 'passes' | 'settings' | 'search' | 'about'
+export type Panel = 'none' | 'passes' | 'settings' | 'search' | 'about' | 'recall'
 export const panel = signal<Panel>('none')
 
 /** A brief confirmation message ("Calibrated on Vega…"). */

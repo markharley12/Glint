@@ -15,7 +15,7 @@ import { gstime } from 'satellite.js'
 import { horizontalToEnu, observerEcf, refraction, TopocentricFrame, type Observer } from '../core/frames.ts'
 import { angleDeg, DEFAULT_SIGMAS, faintnessPenalty, matchPath, type MatchSigmas, type PathMatch, type PathSample } from '../core/identify.ts'
 import { apparentMagnitude, phaseAngle } from '../core/magnitude.ts'
-import { findPasses, findVisiblePasses, maxAngularRate, riseDelay, type Pass, type PassOptions } from '../core/passes.ts'
+import { findPasses, findVisiblePasses, maxAngularRate, riseDelay, timeToPossibleRise, type Pass, type PassOptions } from '../core/passes.ts'
 import { look, type Look } from '../core/look.ts'
 import { jdFromMs, propagateJd, type Satellite } from '../core/satellite.ts'
 import { sunEnu, sunlitFraction, sunTemeAu } from '../core/sun.ts'
@@ -210,4 +210,48 @@ export class Engine {
     }
     return out.sort((a, b) => a.score - b.score).slice(0, limit)
   }
+
+  /**
+   * Visible passes overlapping [ms − slackMs, ms + slackMs], for "what was
+   * that?" after the fact. Visibility is loosened to what someone might
+   * actually have noticed: from 5° up, and in bright twilight (Sun −3°).
+   */
+  recall(ms: number, slackMs: number): Pass[] {
+    if (!this.observer) throw new Error('Engine: no observer set')
+    const frame = this.requireFrame()
+    const from = ms - slackMs
+    const to = ms + slackMs
+    // A LEO pass lasts under a quarter of an hour, so one that overlaps the
+    // window rose no earlier than this before it.
+    const margin = 15 * 60_000
+    const step = 60_000
+    const opts: Partial<PassOptions> = { maxSunEl: -3, visibleMinEl: 5, minPeak: 5 }
+    const out: Pass[] = []
+    const tmp = [0, 0, 0, 0, 0, 0]
+    for (let i = 0; i < this.sats.length; i++) {
+      const sat = this.sats[i]!
+      if (sat.dockedTo !== null) continue
+      // Most satellites can't come up in time at all: one propagation says so.
+      if (timeToPossibleRise(sat, frame, this.obsEcf, from, this.rates[i]!) > to - from) continue
+      // Then a coarse look, minute by minute: up, lit and not hopelessly faint
+      // at some point in the window?
+      let seen = false
+      for (let t = from; t <= to + step / 2 && !seen; t += step) {
+        const jd = jdFromMs(Math.min(t, to))
+        const sv = propagateJd(sat, jd)
+        if (!sv) break
+        frame.setGmst(gstime(jd))
+        frame.toEnu(sv.p, sv.v, tmp)
+        if (tmp[2]! <= 0) continue
+        const l = look(sat, frame, Math.min(t, to))
+        seen = !!l && l.sunlit >= 0.5 && l.sunEl <= -3 && (l.mag === null || l.mag <= IDENTIFY_FAINTEST_MAG)
+      }
+      if (!seen) continue
+      for (const p of findPasses(sat, this.observer, from - margin, to + margin, opts)) {
+        if (p.visible && p.visible.end.ms >= from && p.visible.start.ms <= to) out.push(p)
+      }
+    }
+    return out
+  }
+
 }

@@ -141,6 +141,13 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   satellite moves half a pixel (≤ 10 fps on the map). Any signal the
   picture depends on is watched by one `effect` in SkyView that wakes it;
   a new one must be added there.
+- **"What did I see?"** (`Engine.recall`, `core/recall.ts`): passes
+  overlapping ±5 min of the remembered time, with visibility loosened to
+  5° and Sun −3°; one propagation rules most satellites out, a minute-by-
+  minute look keeps only lit ones brighter than mag 8, then the pass finder
+  runs (≈0.8 s for 12k satellites in a London twilight, ~700 passes).
+  Ranked by a chi-square-like score: time outside the slack, direction
+  errors / 45°, brightness.
 - **No IndexedDB**: the service worker's caches hold the data; settings are a
   small validated JSON in localStorage.
 

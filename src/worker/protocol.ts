@@ -30,6 +30,7 @@ export type Request =
     }
   | { type: 'track'; id: number; norad: number; startMs: number; endMs: number; stepMs: number }
   | { type: 'identify'; id: number; samples: PathSample[]; limit: number; sigmas: MatchSigmas }
+  | { type: 'recall'; id: number; ms: number; slackMs: number }
 
 export interface LoadResult {
   index: DataIndex
@@ -65,6 +66,7 @@ export interface ResultMap {
   passes: Pass[]
   track: TrackPoint[]
   identify: Identification[]
+  recall: Pass[]
 }
 
 export type Response =

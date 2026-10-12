@@ -119,11 +119,12 @@ Progress as of Oct 2026; see CLAUDE.md for what was decided along the way.
 - [x] "What's that?": identify a light by following it with the phone.
 - [x] Night (red) mode, share links, place-name search, keyboard shortcuts.
 - [x] Battery: the render loop draws at 10–20 fps when nothing changes.
+- [x] "What did I see?": rank the passes around a remembered time by
+      remembered directions and brightness.
 
 ### Later ideas
 - Pass notifications (web push is limited on iOS — maybe calendar export instead).
 - Space-Track full catalogue (debris, rocket bodies).
-- "What was that?" lookup for a time + direction after the fact.
 
 ## Risks / open questions
 - Compass accuracy and sensor quirks across phones → mitigated by calibration; needs real-device testing.

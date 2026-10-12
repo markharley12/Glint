@@ -12,6 +12,7 @@ import { installKeyboard } from './keyboard.ts'
 import { LocationPrompt } from './LocationPrompt.tsx'
 import { AboutPanel } from './panels/AboutPanel.tsx'
 import { PassesPanel } from './panels/PassesPanel.tsx'
+import { RecallPanel } from './panels/RecallPanel.tsx'
 import { SearchPanel } from './panels/SearchPanel.tsx'
 import { SettingsPanel } from './panels/SettingsPanel.tsx'
 import { SkyView } from './SkyView.tsx'
@@ -53,6 +54,7 @@ export function App() {
         {p === 'settings' && <SettingsPanel />}
         {p === 'search' && <SearchPanel />}
         {p === 'about' && <AboutPanel />}
+        {p === 'recall' && <RecallPanel />}
       </Guard>
       {toast.value && (
         <div class="toast" role="status">

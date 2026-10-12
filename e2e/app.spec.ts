@@ -137,3 +137,15 @@ test('shares a link to the next pass, with the place rounded', async ({ page }) 
   // A minute before the visible pass starts.
   expect(Date.parse(url.searchParams.get('t')!)).toBeGreaterThan(Date.parse(before))
 })
+
+test('works out what you saw a few minutes ago', async ({ page }) => {
+  const later = new Date(Date.parse(ISS_PASS_PEAK) + 5 * 60_000).toISOString()
+  await page.goto(appUrl({ ...CAPE_TOWN, t: later, paused: 1 }))
+  await page.getByRole('button', { name: 'Find a satellite' }).click()
+  await page.getByRole('button', { name: 'Work out what it was' }).click()
+  const panel = page.getByTestId('recall-panel')
+  await panel.getByRole('group', { name: 'It came from' }).getByRole('button', { name: 'W', exact: true }).click()
+  await panel.getByRole('button', { name: /Bright/ }).click()
+  await panel.getByRole('button', { name: 'Find it' }).click()
+  await expect(panel.getByTestId('recall-results').getByRole('listitem').first()).toContainText('ISS')
+})
