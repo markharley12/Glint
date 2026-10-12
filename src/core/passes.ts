@@ -92,7 +92,7 @@ function toPoint(l: Look): PassPoint {
 
 /** Upper bound on the satellite's geocentric angular rate relative to the
  *  rotating Earth, rad/ms: perigee rate plus Earth rotation. */
-function maxAngularRate(sat: Satellite): number {
+export function maxAngularRate(sat: Satellite): number {
   const n = sat.satrec.no / 60_000 // rad/min → rad/ms
   const e = Math.min(sat.satrec.ecco, 0.99)
   const perigee = (n * (1 + e) ** 2) / (1 - e * e) ** 1.5
@@ -103,15 +103,20 @@ function maxAngularRate(sat: Satellite): number {
  * Shortest time (ms) before the satellite could rise above the horizon,
  * or 0 if it already could be near it.
  */
-function timeToPossibleRise(sat: Satellite, frame: TopocentricFrame, obsEcf: readonly number[], ms: number, rate: number): number {
+export function timeToPossibleRise(sat: Satellite, frame: TopocentricFrame, obsEcf: readonly number[], ms: number, rate: number): number {
   const jd = jdFromMs(ms)
   const sv = propagateJd(sat, jd)
   if (!sv) return 0
   frame.setGmst(gstime(jd))
-  const r = frame.temeToEcf(sv.p)
-  const rn = Math.hypot(r[0], r[1], r[2])
+  return riseDelay(frame.temeToEcf(sv.p), obsEcf, rate)
+}
+
+/** The geometric core of timeToPossibleRise, for a satellite whose
+ *  Earth-fixed position `r` (km) is already known. */
+export function riseDelay(r: readonly number[], obsEcf: readonly number[], rate: number): number {
+  const rn = Math.hypot(r[0]!, r[1]!, r[2]!)
   const on = Math.hypot(obsEcf[0]!, obsEcf[1]!, obsEcf[2]!)
-  const cosTheta = (r[0] * obsEcf[0]! + r[1] * obsEcf[1]! + r[2] * obsEcf[2]!) / (rn * on)
+  const cosTheta = (r[0]! * obsEcf[0]! + r[1]! * obsEcf[1]! + r[2]! * obsEcf[2]!) / (rn * on)
   const theta = Math.acos(Math.max(-1, Math.min(1, cosTheta)))
   const lambda = Math.acos(Math.min(1, on / rn))
   const gap = theta - lambda - HORIZON_MARGIN
