@@ -413,6 +413,8 @@ export class SkyRenderer {
     const skyLimit = f.sunEl > -6 ? Math.min(limit, 1 + (-f.sunEl / 6) * 2) : f.sunEl > -12 ? Math.min(limit, 3 + ((-f.sunEl - 6) / 6) * 2) : limit
     // Stars grow a little when zoomed in, as in a real eyepiece.
     const scale = Math.min(1.6, Math.max(0.8, Math.sqrt(pr.pxPerDeg / 8)))
+    // One path per colour and opacity: a fill per star was the cost.
+    const batches = new Map<string, { colour: string; alpha: number; dots: number[] }>()
     for (const s of getStars()) {
       if (s.mag > skyLimit) break // sorted brightest first
       const v = mul(f.eqjToEnu, s.v)
@@ -420,12 +422,23 @@ export class SkyRenderer {
       if (!pr.project(apparent(v), p)) continue
       if (p.x < -4 || p.y < -4 || p.x > pr.width + 4 || p.y > pr.height + 4) continue
       const r = starRadius(s.mag, scale)
-      ctx.fillStyle = f.palette.starTint ? starColour(s.bv) : f.palette.sunlitFaint
-      ctx.globalAlpha = s.mag > 4 ? 0.6 : 1
-      ctx.beginPath()
-      ctx.arc(p.x, p.y, r, 0, 2 * Math.PI)
-      ctx.fill()
+      const colour = f.palette.starTint ? starColour(s.bv) : f.palette.sunlitFaint
+      const alpha = s.mag > 4 ? 0.6 : 1
+      const key = `${colour}|${alpha}`
+      let b = batches.get(key)
+      if (!b) batches.set(key, (b = { colour, alpha, dots: [] }))
+      b.dots.push(p.x, p.y, r)
       if (s.name) this.hits.push({ kind: 'star', id: s.name, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
+    }
+    for (const { colour, alpha, dots } of batches.values()) {
+      ctx.beginPath()
+      for (let k = 0; k < dots.length; k += 3) {
+        ctx.moveTo(dots[k]! + dots[k + 2]!, dots[k + 1]!)
+        ctx.arc(dots[k]!, dots[k + 1]!, dots[k + 2]!, 0, 2 * Math.PI)
+      }
+      ctx.fillStyle = colour
+      ctx.globalAlpha = alpha
+      ctx.fill()
     }
     ctx.globalAlpha = 1
   }

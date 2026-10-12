@@ -105,3 +105,26 @@ test('a docked module points to its station', async ({ page }) => {
   await card.getByRole('button', { name: 'ISS' }).click()
   await expect(card.getByRole('heading')).toHaveText('ISS')
 })
+
+test('shares a link to the next pass, with the place rounded', async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { shared?: ShareData }
+    navigator.share = (data?: ShareData) => {
+      w.shared = data
+      return Promise.resolve()
+    }
+  })
+  const before = new Date(Date.parse(ISS_PASS_PEAK) - 3 * 3_600_000).toISOString()
+  await page.goto(appUrl({ lat: -33.9249, lon: 18.4241, t: before, paused: 1, sat: 25544 }))
+  const card = page.getByTestId('info-card')
+  await expect(card).toContainText('Next visible')
+  await card.getByRole('button', { name: 'Share ISS' }).click()
+  const shared = await page.evaluate(() => (window as unknown as { shared?: ShareData }).shared)
+  expect(shared?.text).toMatch(/^ISS passes over/)
+  const url = new URL(shared!.url!)
+  expect(url.searchParams.get('lat')).toBe('-33.92')
+  expect(url.searchParams.get('lon')).toBe('18.42')
+  expect(url.searchParams.get('sat')).toBe('25544')
+  // A minute before the visible pass starts.
+  expect(Date.parse(url.searchParams.get('t')!)).toBeGreaterThan(Date.parse(before))
+})

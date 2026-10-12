@@ -285,8 +285,13 @@ p {
 .card__actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin: 10px 0 4px;
+}
+
+.card__spacer {
+  flex: 1;
 }
 
 /* --- buttons and chips -------------------------------------------------------- */

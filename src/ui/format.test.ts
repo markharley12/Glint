@@ -16,6 +16,9 @@ describe('format', () => {
     expect(relative(65_000, 0)).toBe('in 1 min')
     expect(relative(0, 30_000)).toBe('30 s ago')
     expect(relative(2 * 3_600_000 + 10 * 60_000, 0)).toBe('in 2 h 10 min')
+    expect(relative(400, 0)).toBe('now')
+    expect(relative(3_590_000, 0)).toBe('in 1 h')
+    expect(relative(2 * 3_600_000 - 20_000, 0)).toBe('in 2 h')
     expect(relative(3 * 3_600_000, 0)).toBe('in 3 h')
   })
 

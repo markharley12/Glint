@@ -34,17 +34,19 @@ export function dayLabel(ms: number, now: number): string {
   return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-/** "in 5 min", "in 2 h 10 min", "3 min ago". */
+/** "in 5 min", "in 2 h 10 min", "3 min ago", "now". */
 export function relative(ms: number, now: number): string {
   const s = Math.round((ms - now) / 1000)
   const a = Math.abs(s)
+  if (a === 0) return 'now'
   let text: string
   if (a < 60) text = `${a} s`
-  else if (a < 3600) text = `${Math.round(a / 60)} min`
   else {
-    const h = Math.floor(a / 3600)
-    const m = Math.round((a % 3600) / 60)
-    text = m ? `${h} h ${m} min` : `${h} h`
+    // Round to whole minutes first, so 59.5 min is "1 h", not "60 min".
+    const mins = Math.round(a / 60)
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    text = h === 0 ? `${m} min` : m ? `${h} h ${m} min` : `${h} h`
   }
   return s >= 0 ? `in ${text}` : `${text} ago`
 }

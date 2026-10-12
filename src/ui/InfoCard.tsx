@@ -1,15 +1,18 @@
 /** Details of the selected satellite: where it is now, its next visible
  *  pass, and what it is. */
 import { useEffect, useMemo, useState } from 'preact/hooks'
+import { APP_NAME } from '../app-info.ts'
 import type { Look } from '../core/look.ts'
 import { displayName } from '../core/names.ts'
 import type { Pass } from '../core/passes.ts'
+import type { SatelliteInfo } from '../core/satellite.ts'
 import { launchKey, recentLaunch, TRAIN_MAX_AGE_MS } from '../core/trains.ts'
 import { clock } from '../state/clock.ts'
 import { observer } from '../state/observer.ts'
 import { settings } from '../state/settings.ts'
 import { catalog, getTracker, indexByNorad, selected } from '../state/tracker.ts'
-import { following } from '../state/view.ts'
+import { shareUrl } from '../state/url.ts'
+import { following, showToast } from '../state/view.ts'
 import { downloadPasses } from './download.ts'
 import { age, brightnessWords, clockTime, compass, dayLabel, km, magnitude, relative } from './format.ts'
 import { useNow } from './hooks.ts'
@@ -25,6 +28,32 @@ function launchWords(launchedMs: number, now: number, others: number): string {
   const when = days === 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
   const hint = days <= 30 ? ': they may fly as a train, a line of lights following each other' : ''
   return `Launched ${when} with ${others} others${hint}`
+}
+
+/** Share a link to this satellite (at its next visible pass, if any)
+ *  through the system share sheet, or copy it. */
+async function share(info: SatelliteInfo, pass: Pass | undefined, view: string): Promise<void> {
+  const o = observer.peek()
+  if (!o) return
+  const at = pass ? watchWindow(pass).start.ms - 60_000 : clock.now()
+  const url = shareUrl(location.href, { lat: o.latitude, lon: o.longitude, ms: at, view: view === 'ar' ? 'sky' : view, sat: info.norad })
+  const name = displayName(info)
+  const when = pass && new Date(watchWindow(pass).start.ms).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  const text = when ? `${name} passes over ${when}` : `${name} in ${APP_NAME}`
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: name, text, url })
+    } catch {
+      // Cancelled, or the share target failed: nothing to do.
+    }
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(url)
+    showToast('Link copied')
+  } catch {
+    showToast('Couldn’t copy the link')
+  }
 }
 
 export function InfoCard() {
@@ -148,18 +177,9 @@ export function InfoCard() {
 
       <div class="card__actions">
         {nextVisible && (
-          <>
-            <button class="btn" onClick={() => clock.set(watchWindow(nextVisible).start.ms - 60_000)}>
-              Watch it
-            </button>
-            <button
-              class="btn btn--ghost"
-              onClick={() => downloadPasses([{ pass: nextVisible, name: displayName(info) }], `${info.norad}-pass.ics`)}
-              aria-label="Add the next visible pass to your calendar"
-            >
-              <Icon name="calendar" size={16} /> Calendar
-            </button>
-          </>
+          <button class="btn" onClick={() => clock.set(watchWindow(nextVisible).start.ms - 60_000)}>
+            Watch it
+          </button>
         )}
         {mode === 'sky' && look && up && (
           <button
@@ -176,6 +196,20 @@ export function InfoCard() {
             <Icon name="target" size={16} /> {following.value ? 'Following' : 'Follow'}
           </button>
         )}
+        <span class="card__spacer" />
+        {nextVisible && (
+          <button
+            class="icon-btn"
+            onClick={() => downloadPasses([{ pass: nextVisible, name: displayName(info) }], `${info.norad}-pass.ics`)}
+            aria-label="Add the next visible pass to your calendar"
+            title="Add to calendar"
+          >
+            <Icon name="calendar" size={18} />
+          </button>
+        )}
+        <button class="icon-btn" onClick={() => void share(info, nextVisible, mode)} aria-label={`Share ${displayName(info)}`} title="Share">
+          <Icon name="share" size={18} />
+        </button>
       </div>
       <p class={`card__meta ${elementAge > 3 * 86_400_000 ? 'warn' : ''}`}>Orbit data {age(Math.abs(elementAge))}</p>
     </section>

@@ -33,12 +33,15 @@ export function applyUrlParams(search: string): void {
   if (Number.isInteger(sat) && sat > 0) selected.value = sat
 }
 
-/** A link reproducing the current view: place, time, view and selection. */
+/** A link reproducing a view: place, time, view and selection. The place
+ *  is rounded to 0.01° (about a kilometre): plenty for satellite passes,
+ *  and a shared link shouldn't give away which house it came from. */
 export function shareUrl(base: string, opts: { lat: number; lon: number; ms: number; view: string; sat: number | null }): string {
   const u = new URL(base)
   u.search = ''
-  u.searchParams.set('lat', opts.lat.toFixed(4))
-  u.searchParams.set('lon', opts.lon.toFixed(4))
+  u.hash = ''
+  u.searchParams.set('lat', opts.lat.toFixed(2))
+  u.searchParams.set('lon', opts.lon.toFixed(2))
   u.searchParams.set('t', new Date(Math.round(opts.ms / 1000) * 1000).toISOString())
   u.searchParams.set('view', opts.view)
   if (opts.sat !== null) u.searchParams.set('sat', String(opts.sat))
