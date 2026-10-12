@@ -6,6 +6,7 @@ import { observer } from '../state/observer.ts'
 import { panel, toast } from '../state/view.ts'
 import { ArOverlay } from './ArOverlay.tsx'
 import { BottomNav } from './BottomNav.tsx'
+import { Guard } from './Guard.tsx'
 import { InfoCard } from './InfoCard.tsx'
 import { installKeyboard } from './keyboard.ts'
 import { LocationPrompt } from './LocationPrompt.tsx'
@@ -46,10 +47,13 @@ export function App() {
           </>
         )}
       </div>
-      {p === 'passes' && <PassesPanel />}
-      {p === 'settings' && <SettingsPanel />}
-      {p === 'search' && <SearchPanel />}
-      {p === 'about' && <AboutPanel />}
+      {/* A broken panel closes rather than taking the app down. */}
+      <Guard onReset={() => (panel.value = 'none')}>
+        {p === 'passes' && <PassesPanel />}
+        {p === 'settings' && <SettingsPanel />}
+        {p === 'search' && <SearchPanel />}
+        {p === 'about' && <AboutPanel />}
+      </Guard>
       {toast.value && (
         <div class="toast" role="status">
           {toast.value}

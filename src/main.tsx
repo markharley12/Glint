@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { App } from './ui/App.tsx'
+import { Guard } from './ui/Guard.tsx'
 import { applyUrlParams } from './state/url.ts'
 import { getTracker } from './state/tracker.ts'
 import { locate } from './state/observer.ts'
@@ -10,5 +11,10 @@ import './styles.css'
 applyUrlParams(window.location.search)
 getTracker().start()
 if (settings.peek().useGps) void locate()
-render(<App />, document.getElementById('app')!)
+render(
+  <Guard>
+    <App />
+  </Guard>,
+  document.getElementById('app')!,
+)
 registerServiceWorker()
