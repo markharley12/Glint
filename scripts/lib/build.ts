@@ -48,6 +48,16 @@ export const CLASS_MAGNITUDES: { pattern: RegExp; mag: number }[] = [
   { pattern: /^KUIPER/i, mag: 6.5 },
 ]
 
+/**
+ * Standard magnitudes for individual objects McCants lists without one.
+ * - Tiangong (CSS, core module Tianhe): observed passes typically run
+ *   1.5–2 magnitudes fainter than the ISS's on similar geometry, and McCants
+ *   gives the ISS −2.5.
+ */
+export const OBJECT_MAGNITUDES: Record<number, number> = {
+  48274: -1.0,
+}
+
 /** Element sets older than this are almost always lost or decaying
  *  objects, and SGP4 puts them wildly wrong. */
 export const MAX_EPOCH_AGE_DAYS = 30
@@ -85,6 +95,8 @@ export function standardMagnitude(
 ): { stdMag: number | null; source: MagnitudeSource } {
   const m = mccants.get(norad)
   if (m?.mag != null) return { stdMag: m.mag, source: 'mccants' }
+  const estimate = OBJECT_MAGNITUDES[norad]
+  if (estimate !== undefined) return { stdMag: estimate, source: 'estimate' }
   for (const c of CLASS_MAGNITUDES) if (c.pattern.test(name)) return { stdMag: c.mag, source: 'class' }
   const rcs = m?.rcs ?? satcat.get(norad)?.rcs ?? null
   if (rcs !== null) {
@@ -92,6 +104,31 @@ export function standardMagnitude(
     return { stdMag: Math.round(est * 10) / 10, source: 'rcs' }
   }
   return { stdMag: null, source: 'none' }
+}
+
+/**
+ * Modules and visiting spacecraft docked to a station: 18 SDS gives them
+ * the station's own element set (same epoch, same elements), so they would
+ * be drawn as a pile of dots on top of it. Each object sharing an element
+ * set with others maps to the lowest-numbered payload among them, the
+ * station itself (ISS 25544, Tiangong 48274), which maps to nothing.
+ */
+export function findDocked(omms: Iterable<CelestrakOmm>, satcat: Map<number, SatcatEntry>): Map<number, number> {
+  const bySet = new Map<string, number[]>()
+  for (const o of omms) {
+    const key = [o.EPOCH, o.MEAN_MOTION, o.ECCENTRICITY, o.INCLINATION, o.RA_OF_ASC_NODE, o.ARG_OF_PERICENTER, o.MEAN_ANOMALY].join('|')
+    let list = bySet.get(key)
+    if (!list) bySet.set(key, (list = []))
+    if (!list.includes(o.NORAD_CAT_ID)) list.push(o.NORAD_CAT_ID)
+  }
+  const docked = new Map<number, number>()
+  for (const list of bySet.values()) {
+    if (list.length < 2) continue
+    const payloads = list.filter((n) => (satcat.get(n)?.type ?? 'payload') === 'payload')
+    const host = Math.min(...(payloads.length ? payloads : list))
+    for (const n of list) if (n !== host) docked.set(n, host)
+  }
+  return docked
 }
 
 /** Why an element set was dropped, for the build log. */
@@ -135,7 +172,11 @@ export function buildPacks(input: BuildInput): BuildResult {
   const { definitions, groups, satcat, mccants, nowMs } = input
   const model = fitMagnitudeModel(mccants)
   const rejected: Record<Rejection, number> = { invalid: 0, stale: 0, decayed: 0 }
-  const magnitudeSources: Record<MagnitudeSource, number> = { mccants: 0, rcs: 0, class: 0, none: 0 }
+  const magnitudeSources: Record<MagnitudeSource, number> = { mccants: 0, estimate: 0, class: 0, rcs: 0, none: 0 }
+  const docked = findDocked(
+    [...groups.values()].flat().filter((o) => validateOmm(o, nowMs, satcat) === null),
+    satcat,
+  )
 
   // Every group each object appears in, across all downloads, so a
   // satellite in both "stations" and "visual" carries both tags.
@@ -197,6 +238,7 @@ export function buildPacks(input: BuildInput): BuildResult {
             stdMag,
             magSource: source,
             groups: [...(tags.get(o.NORAD_CAT_ID) ?? [])].sort(),
+            dockedTo: docked.get(o.NORAD_CAT_ID) ?? null,
           }),
         )
       }

@@ -44,6 +44,11 @@ const META: Record<number, { groups: string[]; stdMag: number | null; type: 'pay
 }
 
 const { elements } = JSON.parse(await readFile(join(ROOT, 'src/core/fixtures/elements.json'), 'utf8')) as { elements: Omm[] }
+// A module docked to the ISS: the ISS's own element set under its number.
+const iss = elements.find((o) => o.NORAD_CAT_ID === 25544)!
+const docked = new Map([[36086, 25544]])
+META[36086] = { groups: ['stations'], stdMag: null, type: 'payload' }
+elements.push({ ...iss, NORAD_CAT_ID: 36086, OBJECT_NAME: 'POISK', OBJECT_ID: '2009-060A' })
 const generated = '2026-10-12T00:00:00.000Z'
 const pack: PackFile = {
   format: PACK_FORMAT,
@@ -74,6 +79,7 @@ const pack: PackFile = {
       stdMag: m.stdMag,
       magSource: m.stdMag === null ? 'none' : 'mccants',
       groups: m.groups,
+      dockedTo: docked.get(o.NORAD_CAT_ID) ?? null,
     })
   }),
 }

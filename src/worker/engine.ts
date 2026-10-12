@@ -193,6 +193,7 @@ export class Engine {
     const apparent = (l: Look): Vec3 => horizontalToEnu(l.az, l.el + refraction(l.el))
     const out: Identification[] = []
     for (const sat of this.sats) {
+      if (sat.dockedTo !== null) continue // its station stands for it
       const l = look(sat, frame, mid.ms)
       if (!l || l.el < 0 || l.sunlit < 0.5) continue
       if (l.mag !== null && l.mag > IDENTIFY_FAINTEST_MAG) continue

@@ -31,6 +31,7 @@ export function fixtureSatellites(): Map<number, Satellite> {
           stdMag,
           magSource: stdMag === null ? 'none' : 'mccants',
           groups: [],
+          dockedTo: null,
         },
         omm,
       ),

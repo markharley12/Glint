@@ -39,6 +39,7 @@ export const PACK_FIELDS = [
   'stdMag',
   'magSource',
   'groups',
+  'dockedTo',
 ] as const
 
 export type PackField = (typeof PACK_FIELDS)[number]
@@ -108,7 +109,7 @@ const OBJECT_TYPES: Record<string, ObjectType> = {
   debris: 'debris',
 }
 
-const MAG_SOURCES: Record<string, MagnitudeSource> = { mccants: 'mccants', rcs: 'rcs', class: 'class' }
+const MAG_SOURCES: Record<string, MagnitudeSource> = { mccants: 'mccants', estimate: 'estimate', class: 'class', rcs: 'rcs' }
 
 /**
  * Build a function that decodes rows of a pack with these `fields`. Throws
@@ -128,7 +129,7 @@ export function rowDecoder(fields: readonly string[]): (row: PackRow) => Decoded
   const iArgp = idx('argPericenter'), iM = idx('meanAnomaly'), iBstar = idx('bstar')
   const iNdot = idx('meanMotionDot'), iNddot = idx('meanMotionDdot'), iElset = idx('elementSetNo')
   const iRev = idx('revAtEpoch'), iType = idx('type'), iOwner = idx('owner'), iLaunch = idx('launch')
-  const iMag = idx('stdMag'), iMagSrc = idx('magSource'), iGroups = idx('groups')
+  const iMag = idx('stdMag'), iMagSrc = idx('magSource'), iGroups = idx('groups'), iDocked = idx('dockedTo')
 
   const num = (row: PackRow, i: number, fallback = 0): number => {
     const v = i >= 0 ? row[i] : undefined
@@ -157,6 +158,7 @@ export function rowDecoder(fields: readonly string[]): (row: PackRow) => Decoded
         stdMag,
         magSource: stdMag === null ? 'none' : (MAG_SOURCES[str(row, iMagSrc)] ?? 'none'),
         groups: Array.isArray(groups) ? groups : [],
+        dockedTo: iDocked >= 0 && typeof row[iDocked] === 'number' ? row[iDocked] : null,
       },
       omm: {
         OBJECT_NAME: name,
@@ -204,6 +206,7 @@ export interface RowValues {
   stdMag: number | null
   magSource: MagnitudeSource
   groups: string[]
+  dockedTo: number | null
 }
 
 export function encodeRow(v: RowValues): PackRow {

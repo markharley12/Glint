@@ -216,6 +216,20 @@ p {
   max-width: 100%;
 }
 
+.status__next {
+  pointer-events: auto;
+  align-self: flex-start;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  text-shadow: none;
+}
+
 .status__warn {
   color: var(--warn);
 }
@@ -599,6 +613,15 @@ input[type='range'] {
   border: 0;
   border-bottom: 1px solid var(--border);
   padding: 10px 2px;
+}
+
+.results__head {
+  margin: 14px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .results button {

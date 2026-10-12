@@ -35,6 +35,7 @@ function candidates(sats: SatelliteInfo[], scope: Scope, nowMs: number): number[
   if (scope === 'trains') return [...launchGroups(sats, nowMs, TRAIN_PASSES_MAX_AGE_MS).values()].flat()
   return sats
     .filter((s) => {
+      if (s.dockedTo !== null) return false // same passes as its station
       if (scope === 'stations') return isStation(s)
       return s.groups.includes('visual') || isStation(s) || (s.stdMag !== null && s.stdMag <= 4.5 && s.groups.includes('last-30-days'))
     })

@@ -488,6 +488,10 @@ export class SkyRenderer {
       const o = i * STRIDE
       const x0 = buf[o]!
       if (Number.isNaN(x0)) continue
+      const sat = sats[i]!
+      const isSelected = sat.norad === f.selected
+      // Docked modules sit on their station; it stands for them.
+      if (sat.dockedTo !== null && !isSelected) continue
       const ve = buf[o + Slot.VE]!
       const vn = buf[o + Slot.VN]!
       const vu = buf[o + Slot.VU]!
@@ -499,8 +503,6 @@ export class SkyRenderer {
       if (u / range < -0.015) continue
       const v = apparent([e, nn, u])
       if (v[2] < 0) continue
-      const sat = sats[i]!
-      const isSelected = sat.norad === f.selected
       const sunlit = buf[o + Slot.SUNLIT]!
       const mag = buf[o + Slot.MAG]!
       const look = appearance(settings.show, sunlit, mag, f.sunEl, settings.limitingMag)

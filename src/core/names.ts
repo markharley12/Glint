@@ -15,8 +15,18 @@ export function displayName(s: Pick<SatelliteInfo, 'norad' | 'name'>): string {
   return KNOWN[s.norad] ?? s.name
 }
 
-export function isStation(s: Pick<SatelliteInfo, 'groups'>): boolean {
-  return s.groups.includes('stations')
+/** Station cores, by NORAD number. */
+const STATIONS = new Set([25544, 48274])
+
+/**
+ * A crewed space station: the known ones, or a bright payload in
+ * CelesTrak's "stations" group with nothing it is docked to. (That group
+ * also holds docked modules, visiting spacecraft, and cubesats freshly
+ * deployed from the ISS, none of which should be shown as stations.)
+ */
+export function isStation(s: Pick<SatelliteInfo, 'norad' | 'groups' | 'type' | 'stdMag' | 'dockedTo'>): boolean {
+  if (STATIONS.has(s.norad)) return true
+  return s.groups.includes('stations') && s.type === 'payload' && s.dockedTo === null && s.stdMag !== null && s.stdMag <= 0
 }
 
 /** Case-insensitive match on name, display name, NORAD number or

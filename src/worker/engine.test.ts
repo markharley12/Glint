@@ -24,7 +24,7 @@ function constellation(): Satellite[] {
       } as OMMJsonObject
       sats.push(
         makeSatellite(
-          { norad: id++, name: `${o.OBJECT_NAME} #${k}`, intlDes: '', type: 'payload', owner: '', launch: '', stdMag: 4, magSource: 'rcs', groups: [] },
+          { norad: id++, name: `${o.OBJECT_NAME} #${k}`, intlDes: '', type: 'payload', owner: '', launch: '', stdMag: 4, magSource: 'rcs', groups: [], dockedTo: null },
           omm,
         ),
       )

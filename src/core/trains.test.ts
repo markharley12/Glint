@@ -65,7 +65,7 @@ const NOW = Date.UTC(2026, 9, 12)
 const DAY = 86_400_000
 
 function info(norad: number, intlDes: string, launch: string, groups: string[] = []): SatelliteInfo {
-  return { norad, name: `SAT-${norad}`, intlDes, type: 'payload', owner: '', launch, stdMag: null, magSource: 'none', groups }
+  return { norad, name: `SAT-${norad}`, intlDes, type: 'payload', owner: '', launch, stdMag: null, magSource: 'none', groups, dockedTo: null }
 }
 
 describe('recentLaunch and launchGroups', () => {

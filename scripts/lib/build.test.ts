@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { rowDecoder } from '../../src/data/pack.ts'
-import { buildPacks, standardMagnitude, validateOmm, type CelestrakOmm, type PackDefinition } from './build.ts'
+import { buildPacks, findDocked, standardMagnitude, validateOmm, type CelestrakOmm, type PackDefinition } from './build.ts'
 import type { McCantsEntry, SatcatEntry } from './parse.ts'
 
 const NOW = Date.UTC(2026, 9, 12)
@@ -15,7 +15,8 @@ function omm(norad: number, name: string, extra: Partial<CelestrakOmm> = {}): Ce
     INCLINATION: 51.6,
     RA_OF_ASC_NODE: 86,
     ARG_OF_PERICENTER: 248,
-    MEAN_ANOMALY: 112,
+    // Distinct per object: identical element sets mean docked together.
+    MEAN_ANOMALY: norad % 360,
     NORAD_CAT_ID: norad,
     ELEMENT_SET_NO: 999,
     REV_AT_EPOCH: 1000,
@@ -41,12 +42,27 @@ const satcat = new Map<number, SatcatEntry>([
 describe('standardMagnitude', () => {
   const model = { a: 5, b: -2.5, rms: 0, n: 3 }
 
-  it('prefers McCants, then name class, then RCS', () => {
+  it('prefers McCants, then a per-object estimate, then name class, then RCS', () => {
     expect(standardMagnitude(25544, 'ISS', mccants, satcat, model)).toEqual({ stdMag: -2.5, source: 'mccants' })
+    expect(standardMagnitude(48274, 'CSS (TIANHE)', mccants, satcat, model)).toEqual({ stdMag: -1, source: 'estimate' })
     expect(standardMagnitude(44714, 'STARLINK-1008', mccants, satcat, model)).toEqual({ stdMag: 5.5, source: 'class' })
     expect(standardMagnitude(102, 'X', mccants, satcat, model)).toEqual({ stdMag: 0, source: 'rcs' })
     expect(standardMagnitude(200, 'X', mccants, satcat, model)).toEqual({ stdMag: -2.5, source: 'rcs' })
     expect(standardMagnitude(999, 'X', mccants, satcat, model)).toEqual({ stdMag: null, source: 'none' })
+  })
+})
+
+describe('findDocked', () => {
+  it('maps modules sharing a station’s element set to the station', () => {
+    const iss = { MEAN_ANOMALY: 112 }
+    const docked = findDocked(
+      [omm(25544, 'ISS (ZARYA)', iss), omm(36086, 'POISK', iss), omm(100882, 'CREW DRAGON 13', iss), omm(100, 'SL-8 R/B')],
+      satcat,
+    )
+    expect([...docked]).toEqual([
+      [36086, 25544],
+      [100882, 25544],
+    ])
   })
 })
 
@@ -67,7 +83,7 @@ describe('buildPacks', () => {
     { id: 'gnss', title: 'G', description: '', default: false, groups: ['gnss'] },
   ]
   const groups = new Map<string, CelestrakOmm[]>([
-    ['stations', [omm(25544, 'ISS (ZARYA)')]],
+    ['stations', [omm(25544, 'ISS (ZARYA)'), omm(49044, 'ISS (NAUKA)', { MEAN_ANOMALY: 25544 % 360 })]],
     ['visual', [omm(25544, 'ISS (ZARYA)'), omm(100, 'SL-8 R/B'), omm(1, 'BAD', { ECCENTRICITY: 2 })]],
     ['starlink', [omm(44714, 'STARLINK-1008')]],
   ])
@@ -77,14 +93,15 @@ describe('buildPacks', () => {
     const bright = result.packs.find((p) => p.definition.id === 'bright')!.file
     const decode = rowDecoder(bright.fields)
     const rows = bright.rows.map(decode)
-    expect(rows.map((r) => r.info.norad)).toEqual([25544, 100])
+    expect(rows.map((r) => r.info.norad)).toEqual([25544, 49044, 100])
     expect(rows[0]!.info.groups).toEqual(['stations', 'visual'])
     expect(rows[0]!.info.owner).toBe('ISS')
+    expect(rows.map((r) => r.info.dockedTo)).toEqual([null, 25544, null])
   })
 
   it('skips packs with no downloaded groups and counts rejections', () => {
     expect(result.skipped).toEqual(['gnss'])
     expect(result.rejected.invalid).toBe(1)
-    expect(result.magnitudeSources).toEqual({ mccants: 2, rcs: 0, class: 1, none: 0 })
+    expect(result.magnitudeSources).toEqual({ mccants: 2, estimate: 0, class: 1, rcs: 0, none: 1 })
   })
 })

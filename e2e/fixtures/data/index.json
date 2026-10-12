@@ -10,9 +10,9 @@
    "title": "Bright & notable",
    "description": "Fixture pack.",
    "default": true,
-   "count": 8,
+   "count": 9,
    "file": "bright-fixture.json",
-   "bytes": 1852
+   "bytes": 2099
   }
  ]
 }

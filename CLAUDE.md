@@ -76,7 +76,9 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   answering 503 after ~20 requests in a few minutes; the optional packs
   (constellations, gnss, weather) were missing from the local build for that
   reason. Don't loop fetches against it; use `--cache-only`.
-- **Magnitudes**: McCants where listed; per-family defaults for Starlink
+- **Magnitudes**: McCants where listed; per-object estimates
+  (`OBJECT_MAGNITUDES`: Tiangong, which McCants lists without one, at −1.0,
+  ~1.5 mag fainter than the ISS as passes show); per-family defaults for Starlink
   (5.5), OneWeb (7.5), Kuiper (6.5); else a fit of McCants' magnitude against
   log RCS (slope −2.49, rms 0.89 mag); else unknown. The model is the
   half-phase sphere formula McCants' list assumes.
@@ -120,6 +122,14 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   offset / 3°, plus a faintness penalty. Geostationary satellites barely
   move, so only position separates them; the UI says "not moving" below
   0.6° of motion.
+- **Docked modules** (ISS Nauka, Poisk, docked Soyuz/Progress/Dragon;
+  Tiangong's Wentian, Mengtian, visiting Shenzhou/Tianzhou) get the
+  station's own element set from 18 SDS. The build maps every object
+  sharing an element set to the lowest-numbered payload among them
+  (`findDocked`), the pack carries `dockedTo`, and the app draws, lists and
+  identifies only the station. `isStation` is the known cores plus any
+  undocked payload in the "stations" group brighter than std mag 0 — that
+  group also holds cubesats just deployed from the ISS.
 - **No IndexedDB**: the service worker's caches hold the data; settings are a
   small validated JSON in localStorage.
 

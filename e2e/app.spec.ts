@@ -83,3 +83,25 @@ test('remembers settings across visits', async ({ page }) => {
   await page.goto(appUrl({ ...CAPE_TOWN, t: ISS_PASS_PEAK, paused: 1 }))
   await expect(page.locator('.app')).toHaveClass(/app--sky/)
 })
+
+test('in daylight, points to the next bright pass', async ({ page }) => {
+  // Three hours before the evening ISS pass, the Sun is still up.
+  const before = new Date(Date.parse(ISS_PASS_PEAK) - 3 * 3_600_000).toISOString()
+  await page.goto(appUrl({ ...CAPE_TOWN, t: before, paused: 1 }))
+  const next = page.getByTestId('next-pass')
+  await expect(next).toContainText('ISS')
+  await next.click()
+  await expect(page.getByTestId('info-card')).toContainText('ISS')
+  await expect(page.getByTestId('time')).not.toContainText('Live')
+})
+
+test('a docked module points to its station', async ({ page }) => {
+  await page.goto(appUrl({ ...CAPE_TOWN, t: ISS_PASS_PEAK, paused: 1 }))
+  await page.getByRole('button', { name: 'Find a satellite' }).click()
+  await page.getByRole('searchbox').fill('poisk')
+  await page.getByRole('button', { name: /POISK/ }).click()
+  const card = page.getByTestId('info-card')
+  await expect(card).toContainText('Docked to ISS')
+  await card.getByRole('button', { name: 'ISS' }).click()
+  await expect(card.getByRole('heading')).toHaveText('ISS')
+})

@@ -8,6 +8,7 @@ import { settings } from '../state/settings.ts'
 import { catalog } from '../state/tracker.ts'
 import { renderStats } from '../state/view.ts'
 import { age } from './format.ts'
+import { NextPass } from './NextPass.tsx'
 
 /** Orbital elements older than this make positions visibly wrong for
  *  low satellites (Starlinks manoeuvre; drag grows). */
@@ -19,6 +20,7 @@ export function StatusLine() {
   const s = settings.value
   const parts: string[] = []
   const warnings: string[] = []
+  let quiet = false
 
   if (observer.value) parts.push(locationLabel.value === 'GPS' ? 'Your location' : locationLabel.value || 'Saved location')
   if (locationStatus.value === 'locating') parts.push('locating…')
@@ -27,6 +29,7 @@ export function StatusLine() {
   else if (cat.status === 'error') warnings.push(cat.error ?? 'Could not load satellites')
   else if (cat.status === 'ready') {
     const dark = stats.sunEl <= DARK_ENOUGH_SUN_EL
+    quiet = !dark || stats.visible === 0
     if (s.show === 'naked-eye') {
       parts.push(dark ? `${stats.visible} visible` : 'daylight')
     } else {
@@ -41,7 +44,7 @@ export function StatusLine() {
     if (!dark && s.show === 'naked-eye' && observer.value) {
       warnings.push(
         twilight(stats.sunEl) === 'day'
-          ? 'Satellites show up after sunset and before dawn — try the time controls'
+          ? 'Satellites show up after sunset and before dawn'
           : 'Still too bright: satellites appear as the sky darkens',
       )
     }
@@ -55,6 +58,7 @@ export function StatusLine() {
           {w}
         </span>
       ))}
+      {quiet && observer.value && <NextPass />}
     </div>
   )
 }

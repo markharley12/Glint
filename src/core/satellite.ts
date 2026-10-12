@@ -7,8 +7,9 @@ import type { Vec3 } from './vec.ts'
 
 export type ObjectType = 'payload' | 'rocket-body' | 'debris' | 'unknown'
 
-/** Where a standard magnitude came from, best first. */
-export type MagnitudeSource = 'mccants' | 'rcs' | 'class' | 'none'
+/** Where a standard magnitude came from, best first: McCants' list, a
+ *  per-object estimate, a per-family default, a fit on radar size. */
+export type MagnitudeSource = 'mccants' | 'estimate' | 'class' | 'rcs' | 'none'
 
 export interface SatelliteInfo {
   norad: number
@@ -25,6 +26,9 @@ export interface SatelliteInfo {
   magSource: MagnitudeSource
   /** CelesTrak groups the object was listed in (e.g. "stations", "visual"). */
   groups: string[]
+  /** For a module or spacecraft docked to a station, the station's NORAD
+   *  number: it shares the station's orbit, so it is not drawn itself. */
+  dockedTo: number | null
 }
 
 export interface Satellite extends SatelliteInfo {

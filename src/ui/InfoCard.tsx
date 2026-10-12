@@ -70,6 +70,8 @@ export function InfoCard() {
   }, [sel, obs, epoch, stale, cat.generation])
 
   if (sel === null || !info) return null
+  const hostIndex = info.dockedTo === null ? undefined : indexByNorad.value.get(info.dockedTo)
+  const host = hostIndex === undefined ? null : cat.sats[hostIndex]
 
   const elementAge = now - (cat.epochs[i!] ?? now)
   const nextVisible = passes?.find((p) => p.visible)
@@ -94,6 +96,15 @@ export function InfoCard() {
       </header>
 
       {siblings >= 3 && info.launch && <p class="card__sub">{launchWords(Date.parse(info.launch), now, siblings)}</p>}
+      {host && (
+        <p class="card__sub">
+          Docked to{' '}
+          <button class="link" onClick={() => (selected.value = host.norad)}>
+            {displayName(host)}
+          </button>
+          , so it moves with it.
+        </p>
+      )}
       {look && (
         <p class="card__now">
           {up ? (

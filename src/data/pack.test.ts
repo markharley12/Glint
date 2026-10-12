@@ -30,11 +30,13 @@ describe('pack rows', () => {
         stdMag: 4,
         magSource: 'rcs',
         groups: ['visual'],
+        dockedTo: 25544,
       })
       // Through JSON, as the app receives it.
       const { omm, info } = decode(JSON.parse(JSON.stringify(row)) as typeof row)
       expect(info.stdMag).toBe(4)
       expect(info.magSource).toBe('rcs')
+      expect(info.dockedTo).toBe(25544)
       const a = propagate(json2satrec(o), when)!
       const b = propagate(json2satrec(omm as unknown as OMMJsonObject), when)!
       expect(b.position.x).toBe(a.position.x)
@@ -50,6 +52,7 @@ describe('pack rows', () => {
     expect(info.stdMag).toBeNull()
     expect(info.magSource).toBe('none')
     expect(info.groups).toEqual([])
+    expect(info.dockedTo).toBeNull()
     expect(omm.BSTAR).toBe(0.0001)
   })
 
