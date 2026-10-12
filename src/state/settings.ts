@@ -58,7 +58,9 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   view: 'map',
   location: null,
-  useGps: true,
+  // Off until the user taps "Use my location": asking for location
+  // permission on page load, with no context, is how prompts get refused.
+  useGps: false,
   packs: null,
   show: 'naked-eye',
   limitingMag: 5,

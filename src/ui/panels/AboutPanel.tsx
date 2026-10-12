@@ -43,6 +43,7 @@ export function AboutPanel() {
         {sources.map((s) => (
           <li key={s}>{s}</li>
         ))}
+        <li>Place names: GeoNames (geonames.org), CC BY 4.0.</li>
         <li>Stars: Yale Bright Star Catalogue (Hoffleit &amp; Warren), via CDS VizieR.</li>
         <li>Constellation lines: d3-celestial by Olaf Frohn (BSD-3-Clause).</li>
         <li>Propagation: satellite.js (MIT). Sun, Moon and planets: Astronomy Engine by Don Cross (MIT). Magnetic declination: World Magnetic Model 2025 (NOAA/BGS) via geomagnetism.</li>

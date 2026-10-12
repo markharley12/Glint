@@ -130,6 +130,12 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
   identifies only the station. `isStation` is the known cores plus any
   undocked payload in the "stations" group brighter than std mag 0 — that
   group also holds cubesats just deployed from the ISS.
+- **Place search is offline**: GeoNames towns of 15,000+ people (34k),
+  sharded by first letter into `src/data/places/*.json` (largest 70 KB
+  gzipped). Vite makes each shard a lazy chunk; the service-worker plugin
+  leaves them out of the precache and the worker caches any `assets/` file
+  on first use. Country names come from `Intl.DisplayNames`. GPS is no
+  longer requested on page load — only after "Use my location".
 - **No IndexedDB**: the service worker's caches hold the data; settings are a
   small validated JSON in localStorage.
 

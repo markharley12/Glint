@@ -19,7 +19,8 @@
     "e2e": "playwright test",
     "check": "npm run lint && npm run typecheck && npm test",
     "data": "node scripts/fetch-data.ts",
-    "stars": "node scripts/build-stars.ts"
+    "stars": "node scripts/build-stars.ts",
+    "cities": "node scripts/build-cities.ts"
   },
   "dependencies": {
     "@preact/signals": "^2.11.3",

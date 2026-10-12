@@ -475,6 +475,7 @@ p {
   padding: 20px;
   margin: 16px;
   max-width: 440px;
+  overflow-y: auto;
 }
 
 .sheet__head {
@@ -591,6 +592,11 @@ input[type='range'] {
   gap: 8px;
   align-items: flex-end;
   width: 100%;
+}
+
+.places {
+  width: 100%;
+  margin: 0;
 }
 
 .location__manual .field {

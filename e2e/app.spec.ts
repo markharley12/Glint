@@ -11,10 +11,19 @@ test('asks where you are on a first visit, and accepts typed coordinates', async
   await page.goto('./')
   const prompt = page.getByTestId('location-prompt')
   await expect(prompt).toBeVisible()
-  await prompt.getByRole('textbox').fill('51.48, -0.01')
+  await prompt.getByTestId('location-input').fill('51.48, -0.01')
   await prompt.getByRole('button', { name: 'Set' }).click()
   await expect(prompt).toBeHidden()
   await expect(page.getByRole('status').first()).toContainText('51.480° N')
+})
+
+test('finds a town by name for the location', async ({ page }) => {
+  await page.goto('./')
+  const prompt = page.getByTestId('location-prompt')
+  await prompt.getByTestId('location-input').fill('cape t')
+  await prompt.getByRole('button', { name: /Cape Town/ }).first().click()
+  await expect(prompt).toBeHidden()
+  await expect(page.getByRole('status').first()).toContainText('Cape Town')
 })
 
 test('shows the ISS high and bright over Cape Town during its pass', async ({ page }) => {

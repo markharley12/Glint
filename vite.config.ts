@@ -29,7 +29,13 @@ function serviceWorker(): Plugin {
       // After Vite has emitted index.html, so it is in the bundle to list.
       order: 'post',
       handler(_, bundle) {
-        const built = Object.keys(bundle).filter((n) => !n.endsWith('.map'))
+        // Place-name shards load on demand: cached when first used (any
+        // hashed asset is), not precached — 1.4 MB most people never need.
+        const onDemand = (n: string) => {
+          const out = bundle[n]!
+          return out.type === 'chunk' && !!out.facadeModuleId?.includes('/src/data/places/')
+        }
+        const built = Object.keys(bundle).filter((n) => !n.endsWith('.map') && !onDemand(n))
         const copied = publicFiles().filter((n) => !n.startsWith('data/'))
         const files = [...new Set(['./', ...built, ...copied])].sort()
         let source = readFileSync(here('pwa/sw.js'), 'utf8')

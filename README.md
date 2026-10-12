@@ -63,6 +63,8 @@ Other scripts:
 - `npm run data -- --cache-only` rebuilds packs from `.cache/data/` without
   touching the network. Downloads are cached and reused while fresh (two
   hours for orbits), because CelesTrak blocks clients that download too often.
+- `npm run cities` rebuilds `src/data/places/` (towns for the location
+  search, from GeoNames; committed).
 - `npm run stars` rebuilds `src/data/sky.json` (stars and constellations; the
   output is committed).
 - `node scripts/render-icons.ts` re-renders the PNG icons from `pwa/icon.svg`.

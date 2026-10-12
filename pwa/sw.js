@@ -9,6 +9,8 @@
  *   cached copy offline. It is small and says which packs are current.
  * - data/<pack>-<hash>.json: content-addressed, so cache-first forever; old
  *   packs are pruned whenever a fresh index arrives.
+ * - Other assets/ files (the place-name shards): content-hashed and loaded
+ *   on demand, so cached on first use into this build's shell cache.
  *
  * The build (vite.config.ts) fills in VERSION and FILES.
  */
@@ -104,5 +106,5 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate') return event.respondWith(navigation(request))
   if (path === 'data/index.json') return event.respondWith(indexNetworkFirst(request))
   if (path.startsWith('data/')) return event.respondWith(cacheFirst(request, DATA))
-  if (FILES.includes(path)) return event.respondWith(cacheFirst(request, SHELL))
+  if (FILES.includes(path) || path.startsWith('assets/')) return event.respondWith(cacheFirst(request, SHELL))
 })
