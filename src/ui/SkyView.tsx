@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef } from 'preact/hooks'
 import { declination } from '../core/declination.ts'
-import { clamp, type Quat } from '../core/vec.ts'
+import { clamp, quat, type Quat } from '../core/vec.ts'
 import { coverFocalLength } from '../sensors/camera.ts'
 import { correct, OrientationFilter, screenAdjust } from '../sensors/orientation-math.ts'
 import { screenAngle } from '../sensors/orientation.ts'
@@ -18,6 +18,7 @@ import { SkyRenderer, type HitTarget } from '../sky/renderer.ts'
 import { orientation, registerVideo } from '../state/ar.ts'
 import { calibrating, calibrationTarget } from '../state/calibration.ts'
 import { clock } from '../state/clock.ts'
+import { recordPointing } from '../state/identify.ts'
 import { observer } from '../state/observer.ts'
 import { settings, updateSettings } from '../state/settings.ts'
 import { catalog, getTracker, selected } from '../state/tracker.ts'
@@ -146,6 +147,7 @@ export function SkyView() {
       const s = settings.peek()
       const sky = celestial.get(now, o)
       const projector = projectorFor(now)
+      if (s.view === 'ar' && arCamera.q) recordPointing(now, quat.rotate(arCamera.q, [0, 0, -1]))
       const t = track.peek()
       renderer.render({
         ms: now,

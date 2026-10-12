@@ -12,7 +12,8 @@
  * bounds and every satellite is recomputed.
  */
 import { gstime } from 'satellite.js'
-import { observerEcf, TopocentricFrame, type Observer } from '../core/frames.ts'
+import { horizontalToEnu, observerEcf, refraction, TopocentricFrame, type Observer } from '../core/frames.ts'
+import { angleDeg, DEFAULT_SIGMAS, faintnessPenalty, matchPath, type MatchSigmas, type PathMatch, type PathSample } from '../core/identify.ts'
 import { apparentMagnitude, phaseAngle } from '../core/magnitude.ts'
 import { findPasses, findVisiblePasses, maxAngularRate, riseDelay, type Pass, type PassOptions } from '../core/passes.ts'
 import { look, type Look } from '../core/look.ts'
@@ -22,6 +23,24 @@ import type { Vec3 } from '../core/vec.ts'
 import { Slot, STRIDE } from './layout.ts'
 
 export { Slot, STRIDE } from './layout.ts'
+
+/** "What's that?" only considers satellites within this angle of where the
+ *  user was pointing: generous, since phone compasses can be far out. */
+const IDENTIFY_RADIUS_DEG = 40
+/** ...nor anything predicted fainter than this: the user saw it, and the
+ *  magnitude model can be a magnitude or two out. */
+const IDENTIFY_FAINTEST_MAG = 8
+
+export interface Identification {
+  norad: number
+  match: PathMatch
+  /** The match's score plus the faintness penalty: lower is better. */
+  score: number
+  /** Where it was mid-way through the observation, degrees. */
+  az: number
+  el: number
+  mag: number | null
+}
 
 /** A tick further than this from the previous one rebuilds all bounds. */
 const MAX_FORWARD_JUMP_MS = 10 * 60_000
@@ -159,5 +178,35 @@ export class Engine {
       if (l) out.push({ ms: t, az: l.az, el: l.el, sunlit: l.sunlit })
     }
     return out
+  }
+
+  /**
+   * The lit satellites whose paths best match `samples`, the directions the
+   * user pointed while following something across the sky, best first.
+   */
+  identify(samples: PathSample[], limit = 5, sigmas: MatchSigmas = DEFAULT_SIGMAS): Identification[] {
+    const frame = this.requireFrame()
+    if (samples.length < 2) return []
+    const mid = samples[Math.floor(samples.length / 2)]!
+    const observed = samples.map((s) => s.dir)
+    // What the eye sees: refracted directions.
+    const apparent = (l: Look): Vec3 => horizontalToEnu(l.az, l.el + refraction(l.el))
+    const out: Identification[] = []
+    for (const sat of this.sats) {
+      const l = look(sat, frame, mid.ms)
+      if (!l || l.el < 0 || l.sunlit < 0.5) continue
+      if (l.mag !== null && l.mag > IDENTIFY_FAINTEST_MAG) continue
+      if (angleDeg(apparent(l), mid.dir) > IDENTIFY_RADIUS_DEG) continue
+      const predicted: Vec3[] = []
+      for (const s of samples) {
+        const ls = look(sat, frame, s.ms)
+        if (!ls) break
+        predicted.push(apparent(ls))
+      }
+      if (predicted.length !== samples.length) continue
+      const match = matchPath(observed, predicted, sigmas)
+      out.push({ norad: sat.norad, match, score: match.score + faintnessPenalty(l.mag), az: l.az, el: l.el, mag: l.mag })
+    }
+    return out.sort((a, b) => a.score - b.score).slice(0, limit)
   }
 }

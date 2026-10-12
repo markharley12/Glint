@@ -61,6 +61,8 @@ async function handle(req: Request): Promise<void> {
       })
     case 'track':
       return reply({ type: 'track', id: req.id, result: engine.track(req.norad, req.startMs, req.endMs, req.stepMs) })
+    case 'identify':
+      return reply({ type: 'identify', id: req.id, result: engine.identify(req.samples, req.limit, req.sigmas) })
   }
 }
 

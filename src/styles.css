@@ -690,7 +690,8 @@ input[type='range'] {
   margin-top: -1px;
 }
 
-.calibration__panel {
+.calibration__panel,
+.overlay-panel {
   position: absolute;
   left: 10px;
   right: 10px;
@@ -702,6 +703,54 @@ input[type='range'] {
   border-radius: var(--radius);
   padding: 12px 14px;
   pointer-events: auto;
+}
+
+/* "What's that?": a progress ring round the centre of the view. */
+.identify {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.identify__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 104px;
+  height: 104px;
+  margin: -52px 0 0 -52px;
+  transform: rotate(-90deg);
+}
+
+.identify__track,
+.identify__progress {
+  fill: none;
+  stroke-width: 3;
+}
+
+.identify__track {
+  stroke: rgba(255, 255, 255, 0.35);
+}
+
+.identify__progress {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  animation: identify-fill linear forwards;
+}
+
+@keyframes identify-fill {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.identify__lead {
+  font-size: 17px;
+}
+
+.identify__best {
+  font-weight: 700;
 }
 
 /* --- small overlays ------------------------------------------------------------- */

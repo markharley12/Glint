@@ -1,4 +1,6 @@
 import { useEffect } from 'preact/hooks'
+import { calibrating } from '../state/calibration.ts'
+import { identifyState } from '../state/identify.ts'
 import { settings } from '../state/settings.ts'
 import { observer } from '../state/observer.ts'
 import { panel, toast } from '../state/view.ts'
@@ -22,6 +24,9 @@ export function App() {
   }, [s.night])
 
   const p = panel.value
+  // Calibrating or identifying takes over the AR view: just the sky and
+  // its own panel.
+  const focused = s.view === 'ar' && (calibrating.value || identifyState.value.phase !== 'idle')
   return (
     <div class={`app app--${s.view}`}>
       <SkyView />
@@ -30,9 +35,13 @@ export function App() {
         <StatusLine />
         {s.view === 'ar' && <ArOverlay />}
         <div class="hud__spacer" />
-        <InfoCard />
-        <TimeBar />
-        <BottomNav />
+        {!focused && (
+          <>
+            <InfoCard />
+            <TimeBar />
+            <BottomNav />
+          </>
+        )}
       </div>
       {p === 'passes' && <PassesPanel />}
       {p === 'settings' && <SettingsPanel />}

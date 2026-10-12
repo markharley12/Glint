@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { OMMJsonObject } from 'satellite.js'
 import { elements, fixtureSatellites, reference } from '../core/fixtures/index.ts'
-import { TopocentricFrame } from '../core/frames.ts'
+import { horizontalToEnu, TopocentricFrame } from '../core/frames.ts'
 import { look } from '../core/look.ts'
-import { makeSatellite, type Satellite } from '../core/satellite.ts'
+import { makeSatellite, revsPerDay, type Satellite } from '../core/satellite.ts'
 import { Engine, Slot, STRIDE } from './engine.ts'
 
 const START = Date.UTC(2026, 9, 11, 18, 0, 0)
@@ -121,5 +121,39 @@ describe('Engine queries', () => {
     const track = engine.track(25544, pass.rise.ms - 60_000, pass.set.ms + 60_000, 10_000)
     expect(track[0]!.el).toBeLessThan(0)
     expect(Math.max(...track.map((p) => p.el))).toBeCloseTo(pass.max.el, 0)
+  })
+})
+
+describe('Engine.identify', () => {
+  it('picks out the satellite the user followed despite sensor errors', () => {
+    const sats = constellation()
+    const engine = new Engine()
+    engine.setSatellites(sats)
+    // A wobbling hand, a compass 9° out and a half-second lag.
+    const wobble = (k: number) => 0.4 * Math.sin(k * 2.3)
+    let cases = 0
+    let hits = 0
+    for (const obs of Object.values(reference.observers)) {
+      engine.setObserver(obs)
+      const frame = new TopocentricFrame(obs)
+      // Every lit, moving satellite well above the horizon, every 15 min of
+      // a day. (Geostationary ones barely move, so only their position
+      // tells them apart.)
+      for (let t0 = START; t0 < START + 86_400_000; t0 += 15 * 60_000) {
+        for (const target of sats) {
+          const l = look(target, frame, t0)
+          if (!l || l.el < 15 || l.sunlit < 1 || l.mag === null || l.mag > 6 || revsPerDay(target) < 6) continue
+          cases++
+          const samples = Array.from({ length: 9 }, (_, k) => {
+            const ms = t0 + k * 500
+            const lk = look(target, frame, ms - 500)!
+            return { ms, dir: horizontalToEnu(lk.az + 9, lk.el + wobble(k)) }
+          })
+          if (engine.identify(samples, 1)[0]?.norad === target.norad) hits++
+        }
+      }
+    }
+    expect(cases).toBeGreaterThan(50)
+    expect(hits).toBe(cases)
   })
 })

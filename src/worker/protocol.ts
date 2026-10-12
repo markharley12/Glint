@@ -6,11 +6,13 @@
  * buffers are transferred, not copied.
  */
 import type { Observer } from '../core/frames.ts'
+import type { MatchSigmas, PathSample } from '../core/identify.ts'
 import type { Look } from '../core/look.ts'
 import type { Pass, PassOptions } from '../core/passes.ts'
 import type { SatelliteInfo } from '../core/satellite.ts'
 import type { Vec3 } from '../core/vec.ts'
 import type { DataIndex } from '../data/pack.ts'
+import type { Identification } from './engine.ts'
 
 export type Request =
   | { type: 'load'; id: number; baseUrl: string; packs: string[] | null }
@@ -27,6 +29,7 @@ export type Request =
       visibleOnly: boolean
     }
   | { type: 'track'; id: number; norad: number; startMs: number; endMs: number; stepMs: number }
+  | { type: 'identify'; id: number; samples: PathSample[]; limit: number; sigmas: MatchSigmas }
 
 export interface LoadResult {
   index: DataIndex
@@ -61,6 +64,7 @@ export interface ResultMap {
   look: Look | null
   passes: Pass[]
   track: TrackPoint[]
+  identify: Identification[]
 }
 
 export type Response =

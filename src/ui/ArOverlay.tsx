@@ -2,8 +2,10 @@
  *  wrong if they don't start, and calibration. */
 import { cameraStatus, orientation, startAr } from '../state/ar.ts'
 import { calibrating } from '../state/calibration.ts'
+import { identifyState, startIdentify } from '../state/identify.ts'
 import { settings } from '../state/settings.ts'
 import { Calibration } from './Calibration.tsx'
+import { Identify } from './Identify.tsx'
 
 export function ArOverlay() {
   const cam = cameraStatus.value
@@ -20,6 +22,7 @@ export function ArOverlay() {
   if (accuracy !== null && accuracy > 20) messages.push(`Compass accuracy is poor (±${Math.round(accuracy)}°). Wave the phone in a figure of eight, or calibrate.`)
 
   if (calibrating.value) return <Calibration />
+  if (identifyState.value.phase !== 'idle') return <Identify />
 
   return (
     <div class="ar-overlay">
@@ -35,9 +38,14 @@ export function ArOverlay() {
             </p>
           ))}
           {ori === 'active' && (
-            <button class="chip" onClick={() => (calibrating.value = true)}>
-              {settings.value.calibration.at ? 'Recalibrate' : 'Calibrate'}
-            </button>
+            <div class="row">
+              <button class="chip" onClick={startIdentify} data-testid="identify-start">
+                What’s that?
+              </button>
+              <button class="chip" onClick={() => (calibrating.value = true)}>
+                {settings.value.calibration.at ? 'Recalibrate' : 'Calibrate'}
+              </button>
+            </div>
           )}
         </>
       )}
