@@ -428,7 +428,8 @@ export class SkyRenderer {
       let b = batches.get(key)
       if (!b) batches.set(key, (b = { colour, alpha, dots: [] }))
       b.dots.push(p.x, p.y, r)
-      if (s.name) this.hits.push({ kind: 'star', id: s.name, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
+      const mag = s.mag.toFixed(1).replace('-', '−')
+      this.hits.push({ kind: 'star', id: `${s.name ?? 'Star'} · mag ${mag}`, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
     }
     for (const { colour, alpha, dots } of batches.values()) {
       ctx.beginPath()

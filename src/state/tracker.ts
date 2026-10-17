@@ -17,6 +17,12 @@ import { clock } from './clock.ts'
 import { observer } from './observer.ts'
 import { settings } from './settings.ts'
 
+// A string, so the computed only changes when the pack list's contents do.
+const packsKey = computed(() => {
+  const p = settings.value.packs
+  return p === null ? null : JSON.stringify(p)
+})
+
 export type CatalogStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 export interface CatalogState {
@@ -78,8 +84,10 @@ export class Tracker {
         })
       }),
       effect(() => {
-        const packs = settings.value.packs
-        void this.load(packs)
+        // Depend on the pack list alone: reading `settings.value.packs` would
+        // reload the whole catalog on every setting change, zoom included.
+        const packs = packsKey.value
+        void this.load(packs === null ? null : (JSON.parse(packs) as string[]))
       }),
     )
   }
