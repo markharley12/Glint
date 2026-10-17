@@ -2,7 +2,7 @@
 
 Point your phone at the sky and see which satellites are up there. Glint is a
 free, open-source web app: no app store, no account, and it works offline once
-loaded. (The name is provisional; the repository is `sat-ar`.)
+loaded. (The name is provisional.)
 
 - **Sky map** — a chart of the whole sky above you, with every satellite you
   could see right now, the stars, constellations, Moon and planets.

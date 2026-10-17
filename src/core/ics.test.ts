@@ -29,7 +29,7 @@ describe('ics', () => {
     expect(ics.endsWith('END:VCALENDAR\r\n')).toBe(true)
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1)
     expect(ics).toContain('DTSTART:20261012T193000Z')
-    expect(ics).toContain('UID:25544-20261012T193000Z@sat-ar')
+    expect(ics).toContain('UID:25544-20261012T193000Z@glint')
     expect(ics).toContain('TRIGGER:-PT5M')
   })
 

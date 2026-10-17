@@ -49,7 +49,7 @@ export function passesToIcs(passes: CalendarPass[], createdMs: number, appName: 
     lines.push(
       'BEGIN:VEVENT',
       // Stable per pass, so re-exporting updates rather than duplicates.
-      `UID:${p.norad}-${icsTime(p.startMs)}@sat-ar`,
+      `UID:${p.norad}-${icsTime(p.startMs)}@glint`,
       `DTSTAMP:${icsTime(createdMs)}`,
       `DTSTART:${icsTime(p.startMs)}`,
       `DTEND:${icsTime(p.endMs)}`,

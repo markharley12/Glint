@@ -23,7 +23,7 @@ function publicFiles(dir = here('public'), prefix = ''): string[] {
  */
 function serviceWorker(): Plugin {
   return {
-    name: 'sat-ar-service-worker',
+    name: 'glint-service-worker',
     apply: 'build',
     generateBundle: {
       // After Vite has emitted index.html, so it is in the bundle to list.
@@ -72,7 +72,7 @@ function serviceWorker(): Plugin {
  */
 function quietSatelliteWasm(): Plugin {
   return {
-    name: 'sat-ar-quiet-satellite-wasm',
+    name: 'glint-quiet-satellite-wasm',
     enforce: 'pre',
     resolveId(id, importer) {
       if (id.startsWith('node:') && importer?.includes('satellite.js/wasm-build/')) return { id, external: true }

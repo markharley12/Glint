@@ -1,4 +1,4 @@
-# sat-ar (Glint)
+# Glint
 
 A browser AR satellite tracker: sky map, planetarium and camera AR views of
 the satellites overhead, with pass predictions. Started Oct 2026 from
@@ -12,9 +12,9 @@ worker, map / sky / AR views, info card, passes list with calendar export,
 search, settings, calibration, night mode, PWA (manifest, icons, service
 worker, offline), satellite trains (drawn and listed), "What's that?"
 identification by following a light in AR. Unit tests and Playwright end-to-end tests are green. The repo is
-public at github.com/markharley12/sat-ar (since 17 Oct 2026) and deploys to
-https://markharley12.github.io/sat-ar/ through the Pages workflow; secret
-scanning and push protection are on. AR has only been exercised in headless Chrome, driven by synthetic
+public at github.com/markharley12/Glint (since 17 Oct 2026; first named
+sat-ar) and deploys to https://markharley12.github.io/Glint/ through the
+Pages workflow; secret scanning and push protection are on. AR has only been exercised in headless Chrome, driven by synthetic
 `deviceorientationabsolute` events (`e2e/ar.spec.ts`): that proves the
 pipeline is self-consistent with the W3C Euler-angle definitions, but **it
 still needs testing on real Android and iOS phones.**
@@ -63,6 +63,8 @@ npm run data -- --cache-only  # rebuild packs from .cache/data, no network
 
 - **Name "Glint"** is provisional (OPTIONS.md's suggestion); it lives in
   `src/app-info.ts`, `index.html` and `public/manifest.webmanifest`.
+  The repo was renamed from sat-ar; the localStorage settings key keeps its
+  `sat-ar:` prefix so saved settings survive.
 - **Preact + signals** for panels; the render loop reads signals with
   `.peek()` so 60 fps drawing never re-renders components.
 - **Data packs, not raw OMM.** CelesTrak sends no CORS headers, so browsers

@@ -31,7 +31,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CACHE = join(ROOT, '.cache', 'data')
 const OUT = join(ROOT, 'public', 'data')
 
-const USER_AGENT = 'sat-ar/0.1 (open-source satellite AR web app; scheduled build-time refresh)'
+const USER_AGENT = 'Glint/0.1 (open-source satellite AR web app; scheduled build-time refresh; https://github.com/markharley12/Glint)'
 const HOUR = 3_600_000
 
 /** The packs, in the order the app lists them. CelesTrak group names are
