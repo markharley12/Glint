@@ -7,9 +7,10 @@
  * refraction), the way it looks, which matters within a few degrees of the
  * horizon where refraction lifts things by up to half a degree.
  */
-import { horizontalToEnu, refraction } from '../core/frames.ts'
+import { enuToHorizontal, horizontalToEnu, refraction } from '../core/frames.ts'
 import { displayName, isStation } from '../core/names.ts'
 import type { SatelliteInfo } from '../core/satellite.ts'
+import { describeStar } from '../core/star-info.ts'
 import { getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
 import { findTrains, recentLaunch, TRAIN_MAX_AGE_MS, trainName, type TrainCandidate } from '../core/trains.ts'
 import { DEG, RAD, type Mat3, type Vec3 } from '../core/vec.ts'
@@ -415,7 +416,9 @@ export class SkyRenderer {
     const scale = Math.min(1.6, Math.max(0.8, Math.sqrt(pr.pxPerDeg / 8)))
     // One path per colour and opacity: a fill per star was the cost.
     const batches = new Map<string, { colour: string; alpha: number; dots: number[] }>()
-    for (const s of getStars()) {
+    const stars = getStars()
+    for (let si = 0; si < stars.length; si++) {
+      const s = stars[si]!
       if (s.mag > skyLimit) break // sorted brightest first
       const v = mul(f.eqjToEnu, s.v)
       if (v[2] < -0.01) continue
@@ -428,8 +431,9 @@ export class SkyRenderer {
       let b = batches.get(key)
       if (!b) batches.set(key, (b = { colour, alpha, dots: [] }))
       b.dots.push(p.x, p.y, r)
-      const mag = s.mag.toFixed(1).replace('-', '−')
-      this.hits.push({ kind: 'star', id: `${s.name ?? 'Star'} · mag ${mag}`, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
+      const h = enuToHorizontal(v)
+      const info = describeStar({ name: s.name, mag: s.mag, bv: s.bv, rank: si + 1, az: h.az, el: h.el })
+      this.hits.push({ kind: 'star', id: info, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
     }
     for (const { colour, alpha, dots } of batches.values()) {
       ctx.beginPath()

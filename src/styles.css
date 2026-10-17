@@ -803,7 +803,8 @@ input[type='range'] {
   padding: 4px 8px;
   font-size: 13px;
   pointer-events: none;
-  white-space: nowrap;
+  white-space: pre-line;
+  text-align: center;
 }
 
 .toast {
