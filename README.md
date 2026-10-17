@@ -102,7 +102,9 @@ Code: MIT (see `LICENSE`).
 - Standard magnitudes: Mike McCants’ `quicksat.mag`.
 - Stars: Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren),
   via CDS VizieR (catalogue V/50).
-- Constellation lines and names: [d3-celestial](https://github.com/ofrohn/d3-celestial)
-  by Olaf Frohn, BSD-3-Clause.
+- Constellation lines and names: [d3-celestial](https://github.com/ofrohn/d3-celestial),
+  Copyright (c) 2015, Olaf Frohn, BSD-3-Clause.
+- Place names (`src/data/places/`): [GeoNames](https://www.geonames.org),
+  CC BY 4.0.
 - satellite.js (MIT), Astronomy Engine (MIT), geomagnetism with NOAA/BGS’s
   World Magnetic Model (MIT; WMM is public domain), Preact (MIT).

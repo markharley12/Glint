@@ -11,9 +11,10 @@ Built: data pipeline, core maths (checked against Skyfield), propagation
 worker, map / sky / AR views, info card, passes list with calendar export,
 search, settings, calibration, night mode, PWA (manifest, icons, service
 worker, offline), satellite trains (drawn and listed), "What's that?"
-identification by following a light in AR. Unit tests and Playwright end-to-end tests are green; CI and
-Pages workflows are written but **the repo has not been pushed** and has no
-GitHub remote. AR has only been exercised in headless Chrome, driven by synthetic
+identification by following a light in AR. Unit tests and Playwright end-to-end tests are green. The repo is
+public at github.com/markharley12/sat-ar (since 17 Oct 2026) and deploys to
+https://markharley12.github.io/sat-ar/ through the Pages workflow; secret
+scanning and push protection are on. AR has only been exercised in headless Chrome, driven by synthetic
 `deviceorientationabsolute` events (`e2e/ar.spec.ts`): that proves the
 pipeline is self-consistent with the W3C Euler-angle definitions, but **it
 still needs testing on real Android and iOS phones.**
