@@ -20,9 +20,17 @@ export const locationStatus = signal<LocationStatus>('idle')
 /** A location fixed by the URL; it wins over everything for this visit. */
 export const urlLocation = signal<SavedLocation | null>(null)
 
+// Settings change constantly (zoom writes one on every wheel tick), and each
+// change used to make a fresh observer object, which told the tracker the
+// observer had moved and threw away every satellite position. Hand back the
+// same object while the numbers are unchanged.
+let lastObserver: Observer | null = null
 export const observer = computed<Observer | null>(() => {
   const loc = urlLocation.value ?? settings.value.location
-  return loc ? { latitude: loc.latitude, longitude: loc.longitude, height: loc.height } : null
+  if (!loc) return (lastObserver = null)
+  const o = lastObserver
+  if (o && o.latitude === loc.latitude && o.longitude === loc.longitude && o.height === loc.height) return o
+  return (lastObserver = { latitude: loc.latitude, longitude: loc.longitude, height: loc.height })
 })
 
 export const locationLabel = computed(() => (urlLocation.value ?? settings.value.location)?.label ?? '')

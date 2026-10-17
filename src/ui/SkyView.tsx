@@ -301,9 +301,10 @@ export function SkyView() {
         selected.value = hit.id as number
         tooltip.value = null
       } else {
-        tooltip.value = { text: String(hit.id), x, y }
+        const text = hit.detail ? hit.detail() : String(hit.id)
+        tooltip.value = { text, x, y }
         setTimeout(() => {
-          if (tooltip.peek()?.text === String(hit.id)) tooltip.value = null
+          if (tooltip.peek()?.text === text) tooltip.value = null
         }, 6000)
       }
     }

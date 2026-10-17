@@ -16,3 +16,15 @@ describe('star info', () => {
     expect(t).toContain('25° up, S (190°)')
   })
 })
+
+describe('constellationOf', () => {
+  it('finds a constellation for every bright star, exactly for most', async () => {
+    const { getStars, constellationOf } = await import('./sky.ts')
+    const bright = getStars().slice(0, 100)
+    const found = bright.map((s) => constellationOf(s))
+    expect(found.every((c) => c !== null)).toBe(true)
+    const exact = found.filter((c) => c?.exact).length
+    expect(exact).toBeGreaterThan(60)
+    expect(constellationOf(getStars()[9]!)?.name).toBe('Orion') // Betelgeuse
+  })
+})

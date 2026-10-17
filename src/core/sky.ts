@@ -12,7 +12,7 @@
  */
 import { Body, Equator, Illumination, MakeTime, Observer as AeObserver, Rotation_EQJ_HOR, RotateVector, Vector } from 'astronomy-engine'
 import type { Observer } from './frames.ts'
-import { DEG, type Mat3, type Vec3 } from './vec.ts'
+import { DEG, vec, type Mat3, type Vec3 } from './vec.ts'
 import skyData from '../data/sky.json' with { type: 'json' }
 
 export interface Star {
@@ -55,6 +55,28 @@ export function getStars(): Star[] {
     }))
   }
   return stars
+}
+
+/**
+ * The constellation a star belongs to, from the stick figures already
+ * shipped: `exact` when the star is one of a figure's vertices, otherwise
+ * the figure whose label is nearest.
+ */
+export function constellationOf(star: Star): { name: string; exact: boolean } | null {
+  let best: { name: string; d: number } | null = null
+  let nearest: { name: string; d: number } | null = null
+  for (const c of getConstellations()) {
+    const dl = Math.acos(Math.min(1, Math.max(-1, vec.dot(star.v, c.label))))
+    if (!nearest || dl < nearest.d) nearest = { name: c.name, d: dl }
+    for (const line of c.lines) {
+      for (const v of line) {
+        const d = Math.acos(Math.min(1, Math.max(-1, vec.dot(star.v, v))))
+        if (d < 0.0006 && (!best || d < best.d)) best = { name: c.name, d }
+      }
+    }
+  }
+  if (best) return { name: best.name, exact: true }
+  return nearest ? { name: nearest.name, exact: false } : null
 }
 
 export function getConstellations(): Constellation[] {

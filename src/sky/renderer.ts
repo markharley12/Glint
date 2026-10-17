@@ -11,7 +11,7 @@ import { enuToHorizontal, horizontalToEnu, refraction } from '../core/frames.ts'
 import { displayName, isStation } from '../core/names.ts'
 import type { SatelliteInfo } from '../core/satellite.ts'
 import { describeStar } from '../core/star-info.ts'
-import { getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
+import { constellationOf, getConstellations, getStars, type BodyPosition } from '../core/sky.ts'
 import { findTrains, recentLaunch, TRAIN_MAX_AGE_MS, trainName, type TrainCandidate } from '../core/trains.ts'
 import { DEG, RAD, type Mat3, type Vec3 } from '../core/vec.ts'
 import type { Settings, ViewMode } from '../state/settings.ts'
@@ -48,6 +48,8 @@ export interface HitTarget {
   id: number | string
   x: number
   y: number
+  /** Builds a longer description on demand (stars). */
+  detail?: () => string
   /** Drawn radius, px. */
   r: number
   /** Higher wins ties: bright and visible satellites over faint ones. */
@@ -431,9 +433,19 @@ export class SkyRenderer {
       let b = batches.get(key)
       if (!b) batches.set(key, (b = { colour, alpha, dots: [] }))
       b.dots.push(p.x, p.y, r)
-      const h = enuToHorizontal(v)
-      const info = describeStar({ name: s.name, mag: s.mag, bv: s.bv, rank: si + 1, az: h.az, el: h.el })
-      this.hits.push({ kind: 'star', id: info, x: p.x, y: p.y, r, priority: 1 - s.mag / 10 })
+      const rank = si + 1
+      this.hits.push({
+        kind: 'star',
+        id: s.name ?? `Star ${rank}`,
+        detail: () => {
+          const h = enuToHorizontal(v)
+          return describeStar({ name: s.name, mag: s.mag, bv: s.bv, rank, az: h.az, el: h.el, constellation: constellationOf(s) })
+        },
+        x: p.x,
+        y: p.y,
+        r,
+        priority: 1 - s.mag / 10,
+      })
     }
     for (const { colour, alpha, dots } of batches.values()) {
       ctx.beginPath()

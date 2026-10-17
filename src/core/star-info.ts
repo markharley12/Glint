@@ -33,11 +33,15 @@ export interface StarFacts {
   rank: number
   az: number
   el: number
+  constellation?: { name: string; exact: boolean } | null
 }
 
 export function describeStar(s: StarFacts): string {
   const mag = s.mag.toFixed(1).replace('-', '−')
-  const lines = [s.name ?? 'Unnamed star']
+  const c = s.constellation
+  const where = c ? `${c.exact ? 'in' : 'near'} ${c.name}` : ''
+  const lines = [s.name ?? (c ? `Star ${where}` : 'Star')]
+  if (s.name && where) lines.push(`Star ${where}`)
   const rank = s.rank <= 100 ? `${ordinal(s.rank)} brightest star in the sky · ` : ''
   lines.push(`${rank}magnitude ${mag}`)
   const k = Math.round(starTemperature(s.bv) / 100) * 100
